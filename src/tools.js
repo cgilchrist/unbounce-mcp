@@ -13,7 +13,7 @@ import {
 import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
-  setVariantWeights, publishPage, unpublishPage, deletePage,
+  setVariantWeights, publishPage, unpublishPage, deletePage, editVariantHtml,
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
@@ -289,6 +289,20 @@ export const TOOL_DEFINITIONS = [
       required: ['sub_account_id', 'page_id', 'weights'],
     },
   },
+  {
+    name: 'edit_variant',
+    description: 'Replace the HTML of a specific variant on an Unbounce page. Use this to update copy, layout, or design of an individual variant without re-uploading the entire page. Changes are saved immediately in the Unbounce editor. You will need to publish/republish the page after editing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter: a, b, c, d, etc.' },
+        html: { type: 'string', description: 'Full HTML content to set for this variant' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant', 'html'],
+    },
+  },
 ]
 
 export async function handleTool(name, args) {
@@ -429,6 +443,11 @@ export async function handleTool(name, args) {
         // Page may not have been published yet
       }
       return { success: true, weights }
+    }
+
+    case 'edit_variant': {
+      const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, args.html)
+      return result
     }
 
     default:

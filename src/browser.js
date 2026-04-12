@@ -379,6 +379,84 @@ export async function deletePage(subAccountId, pageId) {
   })
 }
 
+// ── Edit variant HTML ──────────────────────────────────────────────────────────
+
+/**
+ * Extract the numeric variant IDs from the page overview DOM.
+ * Returns { a: '325994188', b: '325994189', ... } in variant letter order.
+ */
+async function getVariantNumericIds(page, subAccountId, pageId) {
+  await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
+  await page.waitForLoadState('load')
+
+  // Look for edit links: /variants/{numericId}/edit
+  const ids = await page.evaluate(() => {
+    const links = Array.from(document.querySelectorAll('a[href*="/variants/"][href$="/edit"]'))
+    return links.map(a => {
+      const m = a.href.match(/\/variants\/(\d+)\/edit/)
+      return m ? m[1] : null
+    }).filter(Boolean)
+  })
+
+  if (!ids.length) throw new Error('Could not find variant edit links on page overview')
+
+  // Map to letters: first link = a, second = b, etc.
+  const letters = 'abcdefghij'.split('')
+  const result = {}
+  ids.forEach((id, i) => {
+    if (letters[i]) result[letters[i]] = id
+  })
+  return result
+}
+
+/**
+ * Edit the HTML of a specific variant in the Unbounce visual editor.
+ * @param {string} subAccountId
+ * @param {string} pageId - UUID of the page
+ * @param {string} variantLetter - 'a', 'b', 'c', 'd', etc.
+ * @param {string} newHtml - Full HTML string to set
+ */
+export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml) {
+  return withPage(async (page) => {
+    // Get numeric variant IDs from overview
+    const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
+    const numericId = variantIds[variantLetter.toLowerCase()]
+    if (!numericId) {
+      throw new Error(`Variant "${variantLetter}" not found. Available: ${Object.keys(variantIds).join(', ')}`)
+    }
+
+    // Navigate to the variant editor
+    const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${numericId}/edit`
+    await page.goto(editorUrl)
+    await page.waitForLoadState('load')
+
+    // Wait for the editor canvas to be ready
+    await page.waitForSelector('.lp-code', { timeout: 30000 })
+
+    // Double-click the code element to open HTML editor modal
+    await page.dblclick('.lp-code')
+
+    // Wait for CodeMirror editor to appear in the modal
+    await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+
+    // Set the HTML via CodeMirror API
+    await page.evaluate((html) => {
+      const cm = document.querySelector('.CodeMirror').CodeMirror
+      cm.setValue(html)
+    }, newHtml)
+
+    // Click "Save Code" to apply the HTML change
+    await page.click('a.save-code-button')
+    await page.waitForTimeout(500)
+
+    // Click "Save" to save the variant
+    await page.click('a.save-button-container a.save, .save-button-container .save')
+    await page.waitForTimeout(1000)
+
+    return { variant: variantLetter, numericId, status: 'saved' }
+  })
+}
+
 // ── Cleanup ────────────────────────────────────────────────────────────────────
 
 export async function closeBrowser() {
