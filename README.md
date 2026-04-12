@@ -1,10 +1,10 @@
 # unbounce-mcp
 
-MCP server for publishing landing pages to Unbounce — no UI required. Give Claude an HTML file and a prompt; get a live URL back.
+MCP server for publishing landing pages to Unbounce — no UI required. Give Claude or any MCP-compatible client an HTML file and a prompt; get a live URL back.
 
 ## What it does
 
-- Packages HTML files into Unbounce's `.unbounce` format (supports multi-variant A/B tests)
+- Packages HTML files into Unbounce's `.unbounce` format (supports multi-variant A/B tests and Smart Traffic if you give it multiple HTML files)
 - Uploads to your Unbounce account
 - Sets the page URL (domain + slug)
 - Configures traffic mode (A/B test with custom weights, or Smart Traffic)
@@ -16,7 +16,7 @@ You never touch the Unbounce UI or see the `.unbounce` format.
 
 ### 1. Get your Unbounce API key
 
-In Unbounce: **Account Settings → API → Generate New API Key**
+In Unbounce: **Account Overview (top right) → API Access (lefthand menu) → Create New API Key (top right)**
 
 ### 2. Add to your Claude MCP config
 
@@ -64,10 +64,18 @@ Publish on leads.mycompany.com/campaign
 
 **Use Smart Traffic:**
 ```
-Deploy /path/to/page.html to Unbounce with Smart Traffic enabled
+Deploy /path/to/page1.html, /path/to/page2.html and /path/to/page3.html to Unbounce with Smart Traffic enabled
 ```
 
-Claude will ask for anything it needs (account, domain, slug) if you don't provide it upfront.
+**Do it all in one go:**
+```
+I want you to create me a landing page with 3 variants. I want the page be html and to to look and feel like it's an airbnb page. I want the page to be a giveaway        
+contest for a trip to a unique destination. Include standard landing page sections. Have a form that collects email and name to register for the contest. For the different variants 
+ I want you to come up with your own testing strategy for how the 3 variants should differ. I dont need to preview it when youre done just upload it to Unbounce and publish it to unbouncepages.com/vacation-giveaway
+```
+
+
+Your MCP-compatible client will ask for anything it needs (account, domain, slug) if you don't provide it upfront.
 
 ## Tools
 
@@ -86,6 +94,6 @@ Claude will ask for anything it needs (account, domain, slug) if you don't provi
 
 ## Notes
 
-- After uploading, Unbounce sends a confirmation email — this is expected and not an error
+- After uploading, Unbounce sends a confirmation email to your Unbounce account email — this is expected and not an error
 - Variant weights must be integers summing to 100 (e.g. 3 variants → 34/33/33)
 - If your session expires, a browser window will open to re-authenticate
