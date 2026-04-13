@@ -48,6 +48,22 @@ function transformForms($, variantId) {
           container = container.parent()
         }
       })
+
+      // Also expand container to capture nearby submit buttons (e.g. a CTA button
+      // that's a sibling of the input group — common in custom HTML landing pages).
+      // Walk up until the container includes them; skip buttons in nav/header/footer.
+      const looseButtons = $('button:not([type="reset"]), input[type="submit"]')
+        .filter((_, el) => $(el).closest('form, nav, header, footer').length === 0)
+      if (looseButtons.length > 0) {
+        let expansions = 0
+        while (expansions < 4 && container.length && container[0].tagName !== 'body') {
+          const uncaptured = looseButtons.filter((_, el) => !container.find(el).length)
+          if (!uncaptured.length) break
+          container = container.parent()
+          expansions++
+        }
+      }
+
       const innerHtml = container.html() || ''
       container.html(`<form method="POST">${innerHtml}</form>`)
     }
