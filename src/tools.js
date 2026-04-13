@@ -15,7 +15,7 @@ import {
 import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
-  setVariantWeights, publishPage, unpublishPage, deletePage, editVariantHtml, getVariantContent,
+  setVariantWeights, publishPage, unpublishPage, deletePage, editVariantHtml, getVariantContent, addVariant,
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
@@ -390,6 +390,20 @@ export const TOOL_DEFINITIONS = [
       required: ['sub_account_id', 'page_id', 'variant'],
     },
   },
+  {
+    name: 'add_variant',
+    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. You will need to republish the page after adding a variant.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        html: { type: 'string', description: 'HTML to write into the new variant. Omit to keep the duplicate of variant A.' },
+        css: { type: 'string', description: 'CSS to write into the new variant (include <style> tags). Omit to keep the duplicate.' },
+      },
+      required: ['sub_account_id', 'page_id'],
+    },
+  },
 ]
 
 export async function handleTool(name, args) {
@@ -578,6 +592,10 @@ export async function handleTool(name, args) {
       if (!args.html && !args.css) throw new Error('Provide at least one of: html, css')
       const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, args.html || null, args.css || null)
       return result
+    }
+
+    case 'add_variant': {
+      return addVariant(args.sub_account_id, args.page_id, args.html || null, args.css || null)
     }
 
     default:

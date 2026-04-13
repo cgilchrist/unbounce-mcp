@@ -388,16 +388,26 @@ export async function deletePage(subAccountId, pageId) {
  */
 async function getVariantNumericIds(page, subAccountId, pageId) {
   await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-  // Wait for at least one variant edit button to appear (React SPA must fully render)
-  await page.waitForSelector('[data-testid^="button-edit-"]', { timeout: 30000 })
+  // Wait for either multi-variant edit buttons or the single-variant edit button
+  await page.waitForSelector('[data-testid^="button-edit-"], [data-testid="edit-single-variant"]', { timeout: 30000 })
 
   const ids = await page.evaluate(() => {
-    const buttons = Array.from(document.querySelectorAll('a[data-testid^="button-edit-"]'))
-    return buttons.map(a => {
-      const letter = a.getAttribute('data-testid').replace('button-edit-', '')
-      const m = a.getAttribute('href').match(/\/variants\/(\d+)\/edit/)
-      return m ? { letter, numericId: m[1] } : null
-    }).filter(Boolean)
+    // Multi-variant: data-testid="button-edit-a", "button-edit-b", etc.
+    const multiButtons = Array.from(document.querySelectorAll('a[data-testid^="button-edit-"]'))
+    if (multiButtons.length > 0) {
+      return multiButtons.map(a => {
+        const letter = a.getAttribute('data-testid').replace('button-edit-', '')
+        const m = a.getAttribute('href').match(/\/variants\/(\d+)\/edit/)
+        return m ? { letter, numericId: m[1] } : null
+      }).filter(Boolean)
+    }
+    // Single variant: no letter in testid, always variant "a"
+    const singleBtn = document.querySelector('a[data-testid="edit-single-variant"]')
+    if (singleBtn) {
+      const m = singleBtn.getAttribute('href').match(/\/variants\/(\d+)\/edit/)
+      if (m) return [{ letter: 'a', numericId: m[1] }]
+    }
+    return []
   })
 
   if (!ids.length) throw new Error('Could not find variant edit buttons on page overview')
@@ -538,6 +548,99 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
     await page.waitForTimeout(1000)
 
     return { variant: variantLetter, numericId, status: 'saved' }
+  })
+}
+
+// ── Add variant ────────────────────────────────────────────────────────────────
+
+/**
+ * Add a new variant to an existing page by duplicating variant A via the UI,
+ * then optionally replacing its HTML and/or CSS in the editor.
+ *
+ * @param {string} subAccountId
+ * @param {string} pageId - UUID of the page
+ * @param {string|null} html - HTML to write into the new variant, or null to keep the duplicate
+ * @param {string|null} css  - CSS to write into the new variant, or null to keep the duplicate
+ * @returns {{ variant: string, numericId: string, status: string }}
+ */
+export async function addVariant(subAccountId, pageId, html, css) {
+  return withPage(async (page) => {
+    // Snapshot existing variants before we add one
+    const existingIds = await getVariantNumericIds(page, subAccountId, pageId)
+    const existingLetters = new Set(Object.keys(existingIds))
+
+    // Open the ... flyout and click Add Variant
+    await page.click('[data-testid="flyout-page-actions"]')
+    await page.waitForSelector('[data-testid="flyoutAddVariant"]')
+    await page.click('[data-testid="flyoutAddVariant"]')
+
+    // Modal opens — defaults are "Duplicate an existing variant" + "A - Variant A", leave them
+    await page.waitForSelector('[data-testid="button-create-variant"]', { timeout: 15000 })
+    await page.click('[data-testid="button-create-variant"]')
+
+    // Wait for the overview to re-render with the new variant's edit button
+    await page.waitForFunction(
+      (existing) => {
+        const buttons = Array.from(document.querySelectorAll('a[data-testid^="button-edit-"]'))
+        const letters = buttons.map(a => a.getAttribute('data-testid').replace('button-edit-', ''))
+        return letters.some(l => !existing.includes(l))
+      },
+      [...existingLetters],
+      { timeout: 30000 }
+    )
+
+    // Identify the new variant letter (highest alpha = most recently added)
+    const updatedIds = await getVariantNumericIds(page, subAccountId, pageId)
+    const newLetter = Object.keys(updatedIds)
+      .filter(l => !existingLetters.has(l))
+      .sort()
+      .pop()
+
+    if (!newLetter) throw new Error('Could not identify the newly created variant')
+    const newNumericId = updatedIds[newLetter]
+
+    // If content was provided, open the editor and replace it
+    if (html || css) {
+      const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${newNumericId}/edit`
+      await page.goto(editorUrl)
+      await page.waitForLoadState('load')
+      await page.waitForSelector('#treeToggle', { timeout: 30000 })
+      await page.waitForTimeout(1000)
+
+      if (html) {
+        await page.click('#treeToggle')
+        await page.waitForTimeout(500)
+        await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
+        await page.waitForTimeout(500)
+        await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
+        await page.click('.panel-content a.full-width-button')
+        await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+        await page.evaluate((h) => { document.querySelector('.CodeMirror').CodeMirror.setValue(h) }, html)
+        await page.click('a.save-code-button')
+        await page.waitForTimeout(500)
+      }
+
+      if (css) {
+        await page.click('span.lp-stylesheet.shelf-button')
+        await page.waitForTimeout(300)
+        await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
+        await page.locator('div.menu .menu-item.popup-menu-item').first().click()
+        await page.waitForTimeout(500)
+        await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+        await page.evaluate((c) => { document.querySelector('.CodeMirror').CodeMirror.setValue(c) }, css)
+        await page.click('a.save-code-button.modal-button')
+        await page.waitForTimeout(500)
+      }
+
+      await page.click('a.save-button-container a.save, .save-button-container .save')
+      await page.waitForTimeout(1000)
+    }
+
+    return {
+      variant: newLetter,
+      numericId: newNumericId,
+      status: html || css ? 'created_and_edited' : 'created',
+    }
   })
 }
 
