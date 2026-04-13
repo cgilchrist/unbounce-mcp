@@ -15,6 +15,7 @@ import { SESSION_DIR, SESSION_FILE, UNBOUNCE_APP_BASE } from './config.js'
 import {
   directPublish, directUnpublish, directDelete,
   directSetVariantWeights, directSetTrafficMode, directSetPageUrl,
+  directGetVariant, directEditVariant, directGetVariantNumericIds,
 } from './direct.js'
 
 let _browser = null
@@ -421,6 +422,17 @@ async function getVariantNumericIds(page, subAccountId, pageId) {
  */
 export async function getVariantContent(subAccountId, pageId, variantLetter) {
   return withPage(async (page) => {
+    // Try fully-direct path: GraphQL for IDs + direct API fetch (no Playwright navigation)
+    try {
+      const variantIds = await directGetVariantNumericIds(page, pageId)
+      const numericId = variantIds[variantLetter.toLowerCase()]
+      if (!numericId) throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
+      const { html, css } = await directGetVariant(page, numericId)
+      return { variant: variantLetter, numericId, html, css }
+    } catch (err) {
+    }
+
+    // Playwright UI fallback
     const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
     const numericId = variantIds[variantLetter.toLowerCase()]
     if (!numericId) {
@@ -480,7 +492,24 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
  */
 export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml, newCss) {
   return withPage(async (page) => {
-    // Get numeric variant IDs from the overview page (waits for React to render)
+    // Try fully-direct path: GraphQL for IDs + direct API save (no Playwright navigation)
+    try {
+      const variantIds = await directGetVariantNumericIds(page, pageId)
+      const numericId = variantIds[variantLetter.toLowerCase()]
+      if (!numericId) throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
+      await directEditVariant(page, numericId, newHtml || null, newCss || null)
+      return {
+        variant: variantLetter,
+        numericId,
+        status: 'saved',
+        method: 'direct',
+        html_bytes_written: newHtml ? newHtml.length : null,
+        css_bytes_written: newCss ? newCss.length : null,
+      }
+    } catch (err) {
+    }
+
+    // Playwright UI fallback: navigate to overview to get IDs
     const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
     const numericId = variantIds[variantLetter.toLowerCase()]
     if (!numericId) {
@@ -501,19 +530,15 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
 
     // ── HTML edit ──────────────────────────────────────────────────────────────
     if (newHtml) {
-      // Open the contents tree panel
       await page.click('#treeToggle')
       await page.waitForTimeout(500)
 
-      // Click the code element in the contents tree
       await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
       await page.waitForTimeout(500)
 
-      // Click "Edit Code" in the properties panel
       await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
       await page.click('.panel-content a.full-width-button')
 
-      // Set HTML via CodeMirror
       await page.waitForSelector('.CodeMirror', { timeout: 10000 })
       await page.evaluate((html) => {
         document.querySelector('.CodeMirror').CodeMirror.setValue(html)
@@ -524,23 +549,19 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
         document.querySelector('.CodeMirror')?.CodeMirror?.getValue()?.length ?? 0
       )
 
-      // Click "Save Code" (Done) to close the HTML modal
       await page.click('a.save-code-button')
       await page.waitForTimeout(500)
     }
 
     // ── CSS edit ───────────────────────────────────────────────────────────────
     if (newCss) {
-      // Click the Stylesheets button in the footer
       await page.click('span.lp-stylesheet.shelf-button')
       await page.waitForTimeout(300)
 
-      // Click the first existing stylesheet in the menu (not "+ Add New Stylesheet")
       await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
       await page.locator('div.menu .menu-item.popup-menu-item').first().click()
       await page.waitForTimeout(500)
 
-      // Set CSS via CodeMirror in the modal
       await page.waitForSelector('.CodeMirror', { timeout: 10000 })
       await page.evaluate((css) => {
         document.querySelector('.CodeMirror').CodeMirror.setValue(css)
@@ -551,7 +572,6 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
         document.querySelector('.CodeMirror')?.CodeMirror?.getValue()?.length ?? 0
       )
 
-      // Click "Done" to close the stylesheet modal
       await page.click('a.save-code-button.modal-button')
       await page.waitForTimeout(500)
     }
