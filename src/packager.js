@@ -258,7 +258,7 @@ function mainElements(bodyHtml, cssHtml) {
     {
       id: 'lp-code-1',
       type: 'lp-code',
-      name: 'CNVRT Page',
+      name: 'Custom HTML',
       containerId: 'lp-pom-block-1',
       geometry: {
         position: 'absolute',
@@ -280,7 +280,7 @@ function mainElements(bodyHtml, cssHtml) {
     {
       id: 'lp-stylesheet-1',
       type: 'lp-stylesheet',
-      name: 'CNVRT Styles',
+      name: 'Page Styles',
       containerId: null,
       placement: 'body:after',
       content: { type: null, html: cssHtml, valid: true },
@@ -393,7 +393,7 @@ async function writeVariantFiles(dir, elements, width, hasForm, name, variantId,
   await writeJson(path.join(dir, 'keywords.json'), {})
 }
 
-export async function packageToUnbounce(htmlFiles, imageFiles = [], pageName = 'CNVRT Page') {
+export async function packageToUnbounce(htmlFiles, imageFiles = [], pageName = 'Page') {
   if (!htmlFiles || htmlFiles.length === 0) throw new Error('At least one HTML file is required')
 
   // Build image map: filename → data URI
