@@ -13,7 +13,7 @@ import {
 import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
-  setVariantWeights, publishPage, unpublishPage, deletePage, editVariantHtml,
+  setVariantWeights, publishPage, unpublishPage, deletePage, editVariantHtml, getVariantContent,
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
@@ -290,17 +290,31 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
-    name: 'edit_variant',
-    description: 'Replace the HTML of a specific variant on an Unbounce page. Use this to update copy, layout, or design of an individual variant without re-uploading the entire page. Changes are saved immediately in the Unbounce editor. You will need to publish/republish the page after editing.',
+    name: 'get_variant',
+    description: 'Read the current HTML and CSS of a specific variant on an Unbounce page. Use this before making edits so you can make targeted changes rather than rewriting from scratch.',
     inputSchema: {
       type: 'object',
       properties: {
         sub_account_id: { type: 'string' },
         page_id: { type: 'string', description: 'UUID of the page' },
         variant: { type: 'string', description: 'Variant letter: a, b, c, d, etc.' },
-        html: { type: 'string', description: 'Full HTML content to set for this variant' },
       },
-      required: ['sub_account_id', 'page_id', 'variant', 'html'],
+      required: ['sub_account_id', 'page_id', 'variant'],
+    },
+  },
+  {
+    name: 'edit_variant',
+    description: 'Update the HTML and/or CSS of a specific variant on an Unbounce page without re-uploading. Provide html, css, or both. Changes are saved immediately. You will need to publish/republish the page after editing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter: a, b, c, d, etc.' },
+        html: { type: 'string', description: 'Full HTML content. Omit to leave unchanged.' },
+        css: { type: 'string', description: 'Full CSS content (include <style> tags). Omit to leave unchanged.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant'],
     },
   },
 ]
@@ -445,8 +459,13 @@ export async function handleTool(name, args) {
       return { success: true, weights }
     }
 
+    case 'get_variant': {
+      return getVariantContent(args.sub_account_id, args.page_id, args.variant)
+    }
+
     case 'edit_variant': {
-      const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, args.html)
+      if (!args.html && !args.css) throw new Error('Provide at least one of: html, css')
+      const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, args.html || null, args.css || null)
       return result
     }
 

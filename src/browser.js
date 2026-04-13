@@ -382,43 +382,95 @@ export async function deletePage(subAccountId, pageId) {
 // ── Edit variant HTML ──────────────────────────────────────────────────────────
 
 /**
- * Extract the numeric variant IDs from the page overview DOM.
- * Returns { a: '325994188', b: '325994189', ... } in variant letter order.
+ * Get variant numeric IDs by navigating to the page overview and extracting
+ * the edit button hrefs. data-testid="button-edit-{letter}" is reliable.
+ * Returns { a: '325994188', b: '325994189', ... }
  */
 async function getVariantNumericIds(page, subAccountId, pageId) {
   await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-  await page.waitForLoadState('load')
+  // Wait for at least one variant edit button to appear (React SPA must fully render)
+  await page.waitForSelector('[data-testid^="button-edit-"]', { timeout: 30000 })
 
-  // Look for edit links: /variants/{numericId}/edit
   const ids = await page.evaluate(() => {
-    const links = Array.from(document.querySelectorAll('a[href*="/variants/"][href$="/edit"]'))
-    return links.map(a => {
-      const m = a.href.match(/\/variants\/(\d+)\/edit/)
-      return m ? m[1] : null
+    const buttons = Array.from(document.querySelectorAll('a[data-testid^="button-edit-"]'))
+    return buttons.map(a => {
+      const letter = a.getAttribute('data-testid').replace('button-edit-', '')
+      const m = a.getAttribute('href').match(/\/variants\/(\d+)\/edit/)
+      return m ? { letter, numericId: m[1] } : null
     }).filter(Boolean)
   })
 
-  if (!ids.length) throw new Error('Could not find variant edit links on page overview')
+  if (!ids.length) throw new Error('Could not find variant edit buttons on page overview')
 
-  // Map to letters: first link = a, second = b, etc.
-  const letters = 'abcdefghij'.split('')
-  const result = {}
-  ids.forEach((id, i) => {
-    if (letters[i]) result[letters[i]] = id
-  })
-  return result
+  return Object.fromEntries(ids.map(({ letter, numericId }) => [letter, numericId]))
 }
 
 /**
- * Edit the HTML of a specific variant in the Unbounce visual editor.
+ * Read the current HTML and CSS of a specific variant from the Unbounce editor.
+ * @returns {{ html: string, css: string, variant: string, numericId: string }}
+ */
+export async function getVariantContent(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
+    const numericId = variantIds[variantLetter.toLowerCase()]
+    if (!numericId) {
+      throw new Error(`Variant "${variantLetter}" not found. Available: ${Object.keys(variantIds).join(', ')}`)
+    }
+
+    const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${numericId}/edit`
+    await page.goto(editorUrl)
+    await page.waitForLoadState('load')
+    await page.waitForSelector('#treeToggle', { timeout: 30000 })
+    await page.waitForTimeout(1000)
+
+    // ── Read HTML ──────────────────────────────────────────────────────────────
+    await page.click('#treeToggle')
+    await page.waitForTimeout(500)
+    await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
+    await page.waitForTimeout(500)
+    await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
+    await page.click('.panel-content a.full-width-button')
+    await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+
+    const html = await page.evaluate(() =>
+      document.querySelector('.CodeMirror').CodeMirror.getValue()
+    )
+
+    // Close HTML modal
+    await page.click('a.save-code-button')
+    await page.waitForTimeout(500)
+
+    // ── Read CSS ───────────────────────────────────────────────────────────────
+    await page.click('span.lp-stylesheet.shelf-button')
+    await page.waitForTimeout(300)
+    await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
+    await page.locator('div.menu .menu-item.popup-menu-item').first().click()
+    await page.waitForTimeout(500)
+    await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+
+    const css = await page.evaluate(() =>
+      document.querySelector('.CodeMirror').CodeMirror.getValue()
+    )
+
+    // Close CSS modal
+    await page.click('a.save-code-button.modal-button')
+    await page.waitForTimeout(300)
+
+    return { variant: variantLetter, numericId, html, css }
+  })
+}
+
+/**
+ * Edit the HTML and/or CSS of a specific variant in the Unbounce visual editor.
  * @param {string} subAccountId
  * @param {string} pageId - UUID of the page
  * @param {string} variantLetter - 'a', 'b', 'c', 'd', etc.
- * @param {string} newHtml - Full HTML string to set
+ * @param {string|null} newHtml - Full HTML content, or null to skip
+ * @param {string|null} newCss - Full CSS content (with <style> tags), or null to skip
  */
-export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml) {
+export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml, newCss) {
   return withPage(async (page) => {
-    // Get numeric variant IDs from overview
+    // Get numeric variant IDs from the overview page (waits for React to render)
     const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
     const numericId = variantIds[variantLetter.toLowerCase()]
     if (!numericId) {
@@ -430,26 +482,58 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
     await page.goto(editorUrl)
     await page.waitForLoadState('load')
 
-    // Wait for the editor canvas to be ready
-    await page.waitForSelector('.lp-code', { timeout: 30000 })
+    // Wait for the editor to finish loading
+    await page.waitForSelector('#treeToggle', { timeout: 30000 })
+    await page.waitForTimeout(1000)
 
-    // Double-click the code element to open HTML editor modal
-    await page.dblclick('.lp-code')
+    // ── HTML edit ──────────────────────────────────────────────────────────────
+    if (newHtml) {
+      // Open the contents tree panel
+      await page.click('#treeToggle')
+      await page.waitForTimeout(500)
 
-    // Wait for CodeMirror editor to appear in the modal
-    await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+      // Click the code element in the contents tree
+      await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
+      await page.waitForTimeout(500)
 
-    // Set the HTML via CodeMirror API
-    await page.evaluate((html) => {
-      const cm = document.querySelector('.CodeMirror').CodeMirror
-      cm.setValue(html)
-    }, newHtml)
+      // Click "Edit Code" in the properties panel
+      await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
+      await page.click('.panel-content a.full-width-button')
 
-    // Click "Save Code" to apply the HTML change
-    await page.click('a.save-code-button')
-    await page.waitForTimeout(500)
+      // Set HTML via CodeMirror
+      await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+      await page.evaluate((html) => {
+        document.querySelector('.CodeMirror').CodeMirror.setValue(html)
+      }, newHtml)
 
-    // Click "Save" to save the variant
+      // Click "Save Code" (Done) to close the HTML modal
+      await page.click('a.save-code-button')
+      await page.waitForTimeout(500)
+    }
+
+    // ── CSS edit ───────────────────────────────────────────────────────────────
+    if (newCss) {
+      // Click the Stylesheets button in the footer
+      await page.click('span.lp-stylesheet.shelf-button')
+      await page.waitForTimeout(300)
+
+      // Click the first existing stylesheet in the menu (not "+ Add New Stylesheet")
+      await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
+      await page.locator('div.menu .menu-item.popup-menu-item').first().click()
+      await page.waitForTimeout(500)
+
+      // Set CSS via CodeMirror in the modal
+      await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+      await page.evaluate((css) => {
+        document.querySelector('.CodeMirror').CodeMirror.setValue(css)
+      }, newCss)
+
+      // Click "Done" to close the stylesheet modal
+      await page.click('a.save-code-button.modal-button')
+      await page.waitForTimeout(500)
+    }
+
+    // ── Save the variant ───────────────────────────────────────────────────────
     await page.click('a.save-button-container a.save, .save-button-container .save')
     await page.waitForTimeout(1000)
 
