@@ -176,17 +176,6 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
-    name: 'list_form_fields',
-    description: 'List the form fields defined on a page. Note: may not return fields for fully custom HTML pages.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        page_id: { type: 'string', description: 'The page UUID' },
-      },
-      required: ['page_id'],
-    },
-  },
-  {
     name: 'list_users',
     description: 'List all users with access to the Unbounce account.',
     inputSchema: {
@@ -430,11 +419,6 @@ export async function handleTool(name, args) {
 
     case 'get_lead': {
       return getLead(args.lead_id)
-    }
-
-    case 'list_form_fields': {
-      const fields = await getPageFormFields(args.page_id)
-      return { form_fields: fields }
     }
 
     case 'list_users': {

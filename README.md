@@ -126,7 +126,6 @@ Your MCP-compatible client will ask for anything it needs (account, domain, slug
 |------|-------------|
 | `list_leads` | Get form submission leads for a page (supports pagination) |
 | `get_lead` | Get a single lead by ID |
-| `list_form_fields` | List form fields on a page |
 
 ## Notes
 
