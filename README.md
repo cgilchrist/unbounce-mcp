@@ -49,7 +49,13 @@ Your credentials are never stored. Only the browser session cookies are saved.
 
 ## Usage
 
-**Deploy a single page:**
+**Generate and deploy in one step (no files needed):**
+```
+Create a landing page for a SaaS product called Acme — hero, features, form — and publish it to my Unbounce account on unbouncepages.com/acme
+```
+Claude generates the HTML and passes it directly to the MCP. No files, no download step.
+
+**Deploy a single page from a file:**
 ```
 Publish my landing page at /path/to/page.html to my Unbounce account on unbouncepages.com/summer-promo
 ```
@@ -68,7 +74,7 @@ Publish on leads.mycompany.com/campaign
 Deploy /path/to/page1.html, /path/to/page2.html and /path/to/page3.html to Unbounce with Smart Traffic enabled
 ```
 
-**Do it all in one go:**
+**Generate 3 variants and deploy in one go:**
 ```
 I want you to create me a landing page with 3 variants. I want the page be html and to to look and feel like it's an airbnb page. I want the page to be a giveaway
 contest for a trip to a unique destination. Include standard landing page sections. Have a form that collects email and name to register for the contest. For the different variants

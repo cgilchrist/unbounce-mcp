@@ -227,14 +227,19 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'deploy_page',
-    description: 'Package one or more HTML files into an Unbounce page, upload it, configure the URL and traffic mode, and publish it. Returns the live URL. For pre-packaged .unbounce files, use upload_unbounce_file instead.',
+    description: 'Package one or more HTML variants into an Unbounce page, upload it, configure the URL and traffic mode, and publish it. Returns the live URL. Accepts raw HTML strings (html_variants) or file paths (html_file_paths) — provide one or the other. Multiple variants create an A/B test (A, B, C...). For pre-packaged .unbounce files, use upload_unbounce_file instead.',
     inputSchema: {
       type: 'object',
       properties: {
+        html_variants: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Raw HTML strings for each variant. Use this when you have generated HTML in memory. Multiple items = A/B test variants (A, B, C...).',
+        },
         html_file_paths: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Absolute paths to HTML files on disk. Multiple files = A/B test variants (A, B, C...).',
+          description: 'Absolute paths to HTML files on disk. Use this when HTML files already exist locally. Multiple files = A/B test variants (A, B, C...).',
         },
         page_name: {
           type: 'string',
@@ -267,7 +272,7 @@ export const TOOL_DEFINITIONS = [
           description: 'Whether to publish immediately after setup. Defaults to true.',
         },
       },
-      required: ['html_file_paths', 'sub_account_id'],
+      required: ['sub_account_id'],
     },
   },
   {
@@ -468,6 +473,7 @@ export async function handleTool(name, args) {
 
     case 'deploy_page': {
       const {
+        html_variants,
         html_file_paths,
         page_name,
         sub_account_id,
@@ -478,14 +484,24 @@ export async function handleTool(name, args) {
         publish = true,
       } = args
 
-      const htmlFiles = await Promise.all(
-        html_file_paths.map(async (filePath) => {
-          const html = await fs.promises.readFile(filePath, 'utf8')
-          return { name: path.basename(filePath), html }
-        })
-      )
+      let htmlFiles
+      if (html_variants && html_variants.length > 0) {
+        htmlFiles = html_variants.map((html, i) => ({
+          name: `variant-${String.fromCharCode(97 + i)}.html`,
+          html,
+        }))
+      } else if (html_file_paths && html_file_paths.length > 0) {
+        htmlFiles = await Promise.all(
+          html_file_paths.map(async (filePath) => {
+            const html = await fs.promises.readFile(filePath, 'utf8')
+            return { name: path.basename(filePath), html }
+          })
+        )
+      } else {
+        throw new Error('Provide either html_variants (raw HTML strings) or html_file_paths (paths to files on disk).')
+      }
 
-      const resolvedPageName = page_name || path.basename(html_file_paths[0], '.html')
+      const resolvedPageName = page_name || (html_file_paths?.[0] ? path.basename(html_file_paths[0], '.html') : 'Page')
       const variantIds = htmlFiles.map((_, i) => 'abcdefghijklmnopqrstuvwxyz'[i])
 
       const fileBuffer = await packageToUnbounce(htmlFiles, [], resolvedPageName)
