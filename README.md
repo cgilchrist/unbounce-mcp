@@ -92,20 +92,41 @@ Your MCP-compatible client will ask for anything it needs (account, domain, slug
 
 ## Tools
 
+### Account & structure
 | Tool | Description |
 |------|-------------|
-| `list_accounts` | List Unbounce accounts |
+| `list_accounts` | List all Unbounce accounts |
 | `list_sub_accounts` | List clients within an account |
-| `list_domains` | List domains for a sub-account |
-| `deploy_page` | Full pipeline: package → upload → configure → publish |
-| `publish_page` | Publish an existing page |
+| `list_domains` | List domains available for publishing |
+| `list_page_groups` | List page groups (folders) within a sub-account |
+| `list_users` | List users with access to the account |
+
+### Pages
+| Tool | Description |
+|------|-------------|
+| `list_pages` | List all pages in a sub-account with status and URL |
+| `get_page` | Get details of a specific page |
+| `deploy_page` | Full pipeline: package HTML → upload → configure → publish |
+| `upload_unbounce_file` | Upload a pre-packaged `.unbounce` file |
+| `publish_page` | Publish or republish a page |
 | `unpublish_page` | Take a page offline |
 | `delete_page` | Permanently delete a page |
-| `set_page_url` | Change a page's domain/slug |
+| `set_page_url` | Change a page's domain and slug |
 | `set_traffic_mode` | Switch between A/B Test and Smart Traffic |
 | `set_variant_weights` | Set custom A/B split percentages |
+
+### Variants
+| Tool | Description |
+|------|-------------|
 | `get_variant` | Read the current HTML and CSS of a specific variant |
-| `edit_variant` | Update a variant's HTML, CSS, or both with a prompt |
+| `edit_variant` | Update a variant's HTML, CSS, or both with a plain prompt |
+
+### Leads
+| Tool | Description |
+|------|-------------|
+| `list_leads` | Get form submission leads for a page (supports pagination) |
+| `get_lead` | Get a single lead by ID |
+| `list_form_fields` | List form fields on a page |
 
 ## Notes
 

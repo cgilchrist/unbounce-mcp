@@ -8,7 +8,9 @@ import * as path from 'path'
 import { packageToUnbounce } from './packager.js'
 import {
   getAccounts, getSubAccounts, getDomains,
-  getSubAccountPages, pollForNewPage, pollPageStatus,
+  getSubAccountPages, getSubAccountPageGroups,
+  getPage, getPageFormFields, getPageLeads, getLead,
+  getUsers, pollForNewPage, pollPageStatus,
 } from './api.js'
 import { uploadPage } from './upload.js'
 import {
@@ -114,6 +116,83 @@ export const TOOL_DEFINITIONS = [
         sub_account_id: { type: 'string', description: 'The sub-account ID from list_sub_accounts' },
       },
       required: ['sub_account_id'],
+    },
+  },
+  {
+    name: 'list_pages',
+    description: 'List all landing pages in a sub-account, including their status, URL, and creation date.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+      },
+      required: ['sub_account_id'],
+    },
+  },
+  {
+    name: 'get_page',
+    description: 'Get details of a specific Unbounce page including state, URL, variant count, and publish date.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page_id: { type: 'string', description: 'The page UUID' },
+      },
+      required: ['page_id'],
+    },
+  },
+  {
+    name: 'list_page_groups',
+    description: 'List page groups (folders) within a sub-account.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+      },
+      required: ['sub_account_id'],
+    },
+  },
+  {
+    name: 'list_leads',
+    description: 'Retrieve form submission leads for a specific page. Supports pagination.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page_id: { type: 'string', description: 'The page UUID' },
+        offset: { type: 'number', description: 'Pagination offset (default 0)' },
+        count: { type: 'number', description: 'Number of leads to return (default 50, max 1000)' },
+      },
+      required: ['page_id'],
+    },
+  },
+  {
+    name: 'get_lead',
+    description: 'Get a single lead by ID.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        lead_id: { type: 'string' },
+      },
+      required: ['lead_id'],
+    },
+  },
+  {
+    name: 'list_form_fields',
+    description: 'List the form fields defined on a page. Note: may not return fields for fully custom HTML pages.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        page_id: { type: 'string', description: 'The page UUID' },
+      },
+      required: ['page_id'],
+    },
+  },
+  {
+    name: 'list_users',
+    description: 'List all users with access to the Unbounce account.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+      required: [],
     },
   },
   {
@@ -329,6 +408,38 @@ export async function handleTool(name, args) {
     case 'list_sub_accounts': {
       const subAccounts = await getSubAccounts(args.account_id)
       return { sub_accounts: subAccounts }
+    }
+
+    case 'list_pages': {
+      const pages = await getSubAccountPages(args.sub_account_id)
+      return { pages, total: pages.length }
+    }
+
+    case 'get_page': {
+      return getPage(args.page_id)
+    }
+
+    case 'list_page_groups': {
+      const groups = await getSubAccountPageGroups(args.sub_account_id)
+      return { page_groups: groups, total: groups.length }
+    }
+
+    case 'list_leads': {
+      return getPageLeads(args.page_id, { offset: args.offset, count: args.count })
+    }
+
+    case 'get_lead': {
+      return getLead(args.lead_id)
+    }
+
+    case 'list_form_fields': {
+      const fields = await getPageFormFields(args.page_id)
+      return { form_fields: fields }
+    }
+
+    case 'list_users': {
+      const users = await getUsers()
+      return { users, total: users.length }
     }
 
     case 'list_domains': {

@@ -53,8 +53,62 @@ export async function getSubAccountPages(subAccountId) {
   }))
 }
 
+export async function getSubAccountPageGroups(subAccountId) {
+  const data = await apiFetch(`/sub_accounts/${subAccountId}/page_groups`)
+  return (data.pageGroups || data.page_groups || []).map(g => ({
+    id: g.id,
+    name: g.name,
+    created_at: g.created_at,
+  }))
+}
+
 export async function getPage(pageId) {
-  return apiFetch(`/pages/${pageId}`)
+  const p = await apiFetch(`/pages/${pageId}`)
+  return {
+    id: p.id,
+    name: p.name,
+    url: p.url,
+    state: p.state,
+    created_at: p.created_at,
+    last_published_at: p.last_published_at,
+    variants_count: p.variants_count,
+    domain: p.domain,
+  }
+}
+
+export async function getPageFormFields(pageId) {
+  const data = await apiFetch(`/pages/${pageId}/form_fields`)
+  return data.formFields || data.form_fields || []
+}
+
+export async function getPageLeads(pageId, { offset = 0, count = 50 } = {}) {
+  const data = await apiFetch(`/pages/${pageId}/leads?offset=${offset}&count=${count}`)
+  return {
+    leads: (data.leads || []).map(l => ({
+      id: l.id,
+      created_at: l.created_at,
+      form_data: l.form_data,
+      extra_data: l.extra_data,
+    })),
+    total_count: data.total_count,
+    offset: data.offset,
+    count: data.count,
+  }
+}
+
+export async function getLead(leadId) {
+  return apiFetch(`/leads/${leadId}`)
+}
+
+export async function getUsers() {
+  const data = await apiFetch('/users')
+  return (data.users || []).map(u => ({
+    id: u.id,
+    email: u.email,
+    first_name: u.first_name,
+    last_name: u.last_name,
+    created_at: u.created_at,
+  }))
 }
 
 
