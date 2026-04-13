@@ -496,6 +496,9 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
     await page.waitForSelector('#treeToggle', { timeout: 30000 })
     await page.waitForTimeout(1000)
 
+    let htmlBytesWritten = null
+    let cssBytesWritten = null
+
     // ── HTML edit ──────────────────────────────────────────────────────────────
     if (newHtml) {
       // Open the contents tree panel
@@ -515,6 +518,11 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
       await page.evaluate((html) => {
         document.querySelector('.CodeMirror').CodeMirror.setValue(html)
       }, newHtml)
+
+      // Read back length before closing (CodeMirror is gone after close)
+      htmlBytesWritten = await page.evaluate(() =>
+        document.querySelector('.CodeMirror')?.CodeMirror?.getValue()?.length ?? 0
+      )
 
       // Click "Save Code" (Done) to close the HTML modal
       await page.click('a.save-code-button')
@@ -538,6 +546,11 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
         document.querySelector('.CodeMirror').CodeMirror.setValue(css)
       }, newCss)
 
+      // Read back length before closing
+      cssBytesWritten = await page.evaluate(() =>
+        document.querySelector('.CodeMirror')?.CodeMirror?.getValue()?.length ?? 0
+      )
+
       // Click "Done" to close the stylesheet modal
       await page.click('a.save-code-button.modal-button')
       await page.waitForTimeout(500)
@@ -547,7 +560,7 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
     await page.click('a.save-button-container a.save, .save-button-container .save')
     await page.waitForTimeout(1000)
 
-    return { variant: variantLetter, numericId, status: 'saved' }
+    return { variant: variantLetter, numericId, status: 'saved', html_bytes_written: htmlBytesWritten, css_bytes_written: cssBytesWritten }
   })
 }
 

@@ -39,7 +39,7 @@ function slugify(name) {
  * Shared upload + configure + publish pipeline.
  * Used by both deploy_page and upload_unbounce_file.
  */
-async function uploadAndConfigure({ fileBuffer, fileName, pageName, subAccountId, domain, slug, trafficMode, variantWeights, variantIds, isMultiVariant, publish }) {
+async function uploadAndConfigure({ fileBuffer, fileName, pageName, subAccountId, domain, slug, trafficMode, variantWeights, variantIds, htmlFiles, isMultiVariant, publish }) {
   // Snapshot existing pages before upload
   const existingPages = await getSubAccountPages(subAccountId)
   const existingIds = existingPages.map(p => p.id)
@@ -80,7 +80,10 @@ async function uploadAndConfigure({ fileBuffer, fileName, pageName, subAccountId
     page_id: pageId,
     page_name: pageName,
     url: liveUrl,
-    variants: variantIds.length,
+    variants_deployed: variantIds.map((letter, i) => ({
+      variant: letter,
+      html_bytes: htmlFiles?.[i]?.html?.length ?? null,
+    })),
     traffic_mode: isMultiVariant ? (trafficMode || 'ab_test') : 'standard',
     note: "FYI — you'll get a confirmation email from Unbounce confirming the page was uploaded to your account.",
   }
@@ -515,6 +518,14 @@ export async function handleTool(name, args) {
         throw new Error('Provide either html_variants (raw HTML strings) or html_file_paths (paths to files on disk).')
       }
 
+      // Fix 1: reject empty HTML entries before anything is packaged or uploaded
+      const emptyVariants = htmlFiles.filter(f => !f.html || !f.html.trim())
+      if (emptyVariants.length) {
+        throw new Error(
+          `HTML content is empty for: ${emptyVariants.map(f => f.name).join(', ')}. Pass the full HTML string, not a placeholder.`
+        )
+      }
+
       const resolvedPageName = page_name || (html_file_paths?.[0] ? path.basename(html_file_paths[0], '.html') : 'Page')
       const variantIds = htmlFiles.map((_, i) => 'abcdefghijklmnopqrstuvwxyz'[i])
 
@@ -531,6 +542,7 @@ export async function handleTool(name, args) {
         trafficMode: traffic_mode,
         variantWeights: variant_weights,
         variantIds,
+        htmlFiles,
         isMultiVariant: htmlFiles.length > 1,
         publish,
       })
