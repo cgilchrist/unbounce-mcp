@@ -354,10 +354,161 @@ function confirmationElements() {
   ]
 }
 
+// Prefix all CSS selectors with `scope` (e.g. '#lp-code-1') to beat Unbounce's base stylesheet.
+// Handles: @keyframes/@font-face (verbatim), @media/@supports (scope inner rules),
+// :root/html → scope, body selectors → skip (handled separately), all others → prefixed.
+function scopeCssToContainer(css, scope) {
+  const out = []
+  let i = 0
+  const len = css.length
+
+  function skipWhitespace() {
+    while (i < len && /\s/.test(css[i])) i++
+  }
+
+  function readUntil(char) {
+    const start = i
+    while (i < len && css[i] !== char) i++
+    return css.slice(start, i)
+  }
+
+  function readBlock() {
+    // Reads from opening { to matching closing }, returns content including braces
+    const start = i
+    let depth = 0
+    while (i < len) {
+      if (css[i] === '{') depth++
+      else if (css[i] === '}') { depth--; if (depth === 0) { i++; break } }
+      i++
+    }
+    return css.slice(start, i)
+  }
+
+  function scopeSelectors(selectorStr) {
+    return selectorStr
+      .split(',')
+      .map(sel => {
+        const s = sel.trim()
+        if (!s) return s
+        // :root and html → remap to scope
+        if (/^:root\b/.test(s)) return s.replace(/^:root\b/, scope)
+        if (/^html\b/.test(s)) return s.replace(/^html\b/, scope)
+        // body already transformed by the caller; skip re-prefixing
+        if (/^body\.lp-pom-body/.test(s)) return s
+        // bare body → skip (handled by body transform)
+        if (/^body\b/.test(s)) return s
+        return `${scope} ${s}`
+      })
+      .join(', ')
+  }
+
+  function scopeInnerRules(blockContent) {
+    // blockContent is the text BETWEEN the outer { }
+    // We need to scope each rule's selector inside the block
+    const inner = []
+    let j = 0
+    const src = blockContent
+    const srcLen = src.length
+
+    while (j < srcLen) {
+      // Skip whitespace/comments
+      if (/\s/.test(src[j])) { inner.push(src[j++]); continue }
+      if (src[j] === '/' && src[j+1] === '*') {
+        const end = src.indexOf('*/', j + 2)
+        const commentEnd = end === -1 ? srcLen : end + 2
+        inner.push(src.slice(j, commentEnd))
+        j = commentEnd
+        continue
+      }
+      // Read until { or end
+      const selStart = j
+      while (j < srcLen && src[j] !== '{' && src[j] !== '}') j++
+      if (j >= srcLen || src[j] === '}') {
+        inner.push(src.slice(selStart, j))
+        break
+      }
+      const rawSel = src.slice(selStart, j).trim()
+      // Read the declaration block
+      let depth = 0
+      const blockStart = j
+      while (j < srcLen) {
+        if (src[j] === '{') depth++
+        else if (src[j] === '}') { depth--; if (depth === 0) { j++; break } }
+        j++
+      }
+      const declBlock = src.slice(blockStart, j)
+      inner.push(`${scopeSelectors(rawSel)}${declBlock}`)
+    }
+    return inner.join('')
+  }
+
+  while (i < len) {
+    skipWhitespace()
+    if (i >= len) break
+
+    // Comments
+    if (css[i] === '/' && css[i+1] === '*') {
+      const end = css.indexOf('*/', i + 2)
+      const commentEnd = end === -1 ? len : end + 2
+      out.push(css.slice(i, commentEnd))
+      i = commentEnd
+      continue
+    }
+
+    // At-rules
+    if (css[i] === '@') {
+      const atStart = i
+      // read the at-keyword
+      while (i < len && css[i] !== '{' && css[i] !== ';') i++
+      const atHeader = css.slice(atStart, i).trim().toLowerCase()
+      const keyword = (atHeader.match(/^@([\w-]+)/) || [])[1] || ''
+
+      if (css[i] === ';') {
+        // simple at-rule like @import, @charset
+        out.push(css.slice(atStart, i + 1))
+        i++
+        continue
+      }
+
+      // block at-rule
+      const headerText = css.slice(atStart, i)
+      const block = readBlock() // reads { ... }
+      const innerContent = block.slice(1, -1) // strip outer braces
+
+      if (keyword === 'keyframes' || keyword === '-webkit-keyframes' || keyword === '-moz-keyframes' ||
+          keyword === 'font-face' || keyword === 'counter-style') {
+        // verbatim — no scoping
+        out.push(`${headerText}${block}`)
+      } else if (keyword === 'media' || keyword === 'supports' || keyword === 'layer' || keyword === 'container') {
+        // scope rules inside
+        out.push(`${headerText}{${scopeInnerRules(innerContent)}}`)
+      } else {
+        // unknown at-rule with block — copy verbatim
+        out.push(`${headerText}${block}`)
+      }
+      continue
+    }
+
+    // Regular rule: read selector up to {
+    const selStart = i
+    while (i < len && css[i] !== '{') i++
+    if (i >= len) break
+    const rawSel = css.slice(selStart, i).trim()
+    const block = readBlock()
+    out.push(`${scopeSelectors(rawSel)}${block}`)
+  }
+
+  return out.join('\n')
+}
+
 function extractCss($) {
   const cssChunks = []
   $('head style').each((_, el) => {
-    const css = $(el).text().replace(/\bbody\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
+    const raw = $(el).text()
+    // Step 1: remap body → body.lp-pom-body (existing transform)
+    const bodyScoped = raw.replace(/\bbody\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
+    // Step 2: scope all other selectors to #lp-code-1 so they beat Unbounce base styles
+    const css = scopeCssToContainer(bodyScoped, '#lp-code-1')
     cssChunks.push(css)
   })
   cssChunks.push(`
