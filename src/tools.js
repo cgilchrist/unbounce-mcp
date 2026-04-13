@@ -48,32 +48,93 @@ async function uploadAndConfigure({ fileBuffer, fileName, pageName, subAccountId
   const { cookies, csrfToken } = await getUploadCredentials(subAccountId)
   await uploadPage(subAccountId, fileBuffer, fileName, cookies, csrfToken)
 
-  // Poll for the new page
-  const newPage = await pollForNewPage(subAccountId, existingIds)
+  // Poll for the new page — if this times out the file was uploaded but we can't find it yet
+  let newPage
+  try {
+    newPage = await pollForNewPage(subAccountId, existingIds)
+  } catch (err) {
+    throw new Error(
+      `File was uploaded to Unbounce but the new page could not be found (${err.message}). ` +
+      `Do NOT re-upload — call list_pages to locate the page, then use set_page_url and publish_page to complete setup.`
+    )
+  }
   const pageId = newPage.id
+
+  // ── Post-upload steps: page exists now — never let errors swallow the pageId ──
+  const pendingSteps = []
+  let urlSet = !domain // if no domain was requested, URL step is satisfied
 
   // Set URL
   if (domain) {
     const resolvedSlug = slug !== undefined ? slug : slugify(pageName)
-    await setPageUrl(subAccountId, pageId, domain, resolvedSlug)
+    try {
+      await setPageUrl(subAccountId, pageId, domain, resolvedSlug)
+      urlSet = true
+    } catch (err) {
+      const isTaken = err.message?.includes('already taken')
+      pendingSteps.push({
+        step: 'set_page_url',
+        tool: 'set_page_url',
+        args: { sub_account_id: subAccountId, page_id: pageId, domain, slug: resolvedSlug },
+        error: isTaken
+          ? `slug "${resolvedSlug}" is already taken — choose a different slug then call set_page_url, then publish_page`
+          : err.message,
+      })
+    }
   }
 
   // Traffic mode + variant weights
   if (isMultiVariant) {
     const resolvedMode = trafficMode || 'ab_test'
-    await setTrafficMode(subAccountId, pageId, resolvedMode)
-    if (resolvedMode === 'ab_test') {
-      const weights = variantWeights || evenWeights(variantIds)
-      await setVariantWeights(subAccountId, pageId, weights)
+    try {
+      await setTrafficMode(subAccountId, pageId, resolvedMode)
+      if (resolvedMode === 'ab_test') {
+        const weights = variantWeights || evenWeights(variantIds)
+        try {
+          await setVariantWeights(subAccountId, pageId, weights)
+        } catch (err) {
+          pendingSteps.push({
+            step: 'set_variant_weights',
+            tool: 'set_variant_weights',
+            args: { sub_account_id: subAccountId, page_id: pageId, weights },
+            error: err.message,
+          })
+        }
+      }
+    } catch (err) {
+      pendingSteps.push({
+        step: 'set_traffic_mode',
+        tool: 'set_traffic_mode',
+        args: { sub_account_id: subAccountId, page_id: pageId, mode: resolvedMode },
+        error: err.message,
+      })
     }
   }
 
-  // Publish
+  // Publish — skip if URL wasn't set (would publish at wrong/UUID slug)
   let liveUrl = null
   if (publish) {
-    await publishPage(subAccountId, pageId)
-    const published = await pollPageStatus(pageId, 'published')
-    liveUrl = published.url
+    if (!urlSet) {
+      pendingSteps.push({
+        step: 'publish_page',
+        tool: 'publish_page',
+        args: { sub_account_id: subAccountId, page_id: pageId },
+        error: 'skipped — assign a URL first, then call publish_page',
+      })
+    } else {
+      try {
+        await publishPage(subAccountId, pageId)
+        const published = await pollPageStatus(pageId, 'published')
+        liveUrl = published.url
+      } catch (err) {
+        pendingSteps.push({
+          step: 'publish_page',
+          tool: 'publish_page',
+          args: { sub_account_id: subAccountId, page_id: pageId },
+          error: err.message,
+        })
+      }
+    }
   }
 
   return {
@@ -85,7 +146,10 @@ async function uploadAndConfigure({ fileBuffer, fileName, pageName, subAccountId
       html_bytes: htmlFiles?.[i]?.html?.length ?? null,
     })),
     traffic_mode: isMultiVariant ? (trafficMode || 'ab_test') : 'standard',
-    note: "FYI — you'll get a confirmation email from Unbounce confirming the page was uploaded to your account.",
+    ...(pendingSteps.length > 0 && { pending_steps: pendingSteps }),
+    note: pendingSteps.length > 0
+      ? `Page was created (page_id: ${pageId}) but some steps did not complete. Do NOT re-deploy — use the tools listed in pending_steps to finish setup.`
+      : "FYI — you'll get a confirmation email from Unbounce confirming the page was uploaded to your account.",
   }
 }
 

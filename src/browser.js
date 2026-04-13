@@ -557,8 +557,21 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
     }
 
     // ── Save the variant ───────────────────────────────────────────────────────
-    await page.click('a.save-button-container a.save, .save-button-container .save')
-    await page.waitForTimeout(1000)
+    try {
+      await page.click('a.save-button-container a.save, .save-button-container .save')
+      await page.waitForTimeout(1000)
+    } catch (err) {
+      // Content was written to the editor but the save click failed.
+      // Do NOT re-edit from scratch — retry by calling edit_variant again.
+      return {
+        variant: variantLetter,
+        numericId,
+        status: 'save_failed',
+        html_bytes_written: htmlBytesWritten,
+        css_bytes_written: cssBytesWritten,
+        error: `Content was written to the editor (html_bytes_written: ${htmlBytesWritten}) but the save failed: ${err.message}. Call edit_variant again to retry the save.`,
+      }
+    }
 
     return { variant: variantLetter, numericId, status: 'saved', html_bytes_written: htmlBytesWritten, css_bytes_written: cssBytesWritten }
   })
@@ -614,39 +627,49 @@ export async function addVariant(subAccountId, pageId, html, css) {
 
     // If content was provided, open the editor and replace it
     if (html || css) {
-      const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${newNumericId}/edit`
-      await page.goto(editorUrl)
-      await page.waitForLoadState('load')
-      await page.waitForSelector('#treeToggle', { timeout: 30000 })
-      await page.waitForTimeout(1000)
+      try {
+        const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${newNumericId}/edit`
+        await page.goto(editorUrl)
+        await page.waitForLoadState('load')
+        await page.waitForSelector('#treeToggle', { timeout: 30000 })
+        await page.waitForTimeout(1000)
 
-      if (html) {
-        await page.click('#treeToggle')
-        await page.waitForTimeout(500)
-        await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
-        await page.waitForTimeout(500)
-        await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
-        await page.click('.panel-content a.full-width-button')
-        await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-        await page.evaluate((h) => { document.querySelector('.CodeMirror').CodeMirror.setValue(h) }, html)
-        await page.click('a.save-code-button')
-        await page.waitForTimeout(500)
+        if (html) {
+          await page.click('#treeToggle')
+          await page.waitForTimeout(500)
+          await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
+          await page.waitForTimeout(500)
+          await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
+          await page.click('.panel-content a.full-width-button')
+          await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+          await page.evaluate((h) => { document.querySelector('.CodeMirror').CodeMirror.setValue(h) }, html)
+          await page.click('a.save-code-button')
+          await page.waitForTimeout(500)
+        }
+
+        if (css) {
+          await page.click('span.lp-stylesheet.shelf-button')
+          await page.waitForTimeout(300)
+          await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
+          await page.locator('div.menu .menu-item.popup-menu-item').first().click()
+          await page.waitForTimeout(500)
+          await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+          await page.evaluate((c) => { document.querySelector('.CodeMirror').CodeMirror.setValue(c) }, css)
+          await page.click('a.save-code-button.modal-button')
+          await page.waitForTimeout(500)
+        }
+
+        await page.click('a.save-button-container a.save, .save-button-container .save')
+        await page.waitForTimeout(1000)
+      } catch (err) {
+        // Variant was created but content could not be written — do NOT call add_variant again
+        return {
+          variant: newLetter,
+          numericId: newNumericId,
+          status: 'created',
+          edit_error: `Variant ${newLetter.toUpperCase()} was created but content could not be written: ${err.message}. Call edit_variant with variant: "${newLetter}" to set the HTML/CSS, then republish.`,
+        }
       }
-
-      if (css) {
-        await page.click('span.lp-stylesheet.shelf-button')
-        await page.waitForTimeout(300)
-        await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
-        await page.locator('div.menu .menu-item.popup-menu-item').first().click()
-        await page.waitForTimeout(500)
-        await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-        await page.evaluate((c) => { document.querySelector('.CodeMirror').CodeMirror.setValue(c) }, css)
-        await page.click('a.save-code-button.modal-button')
-        await page.waitForTimeout(500)
-      }
-
-      await page.click('a.save-button-container a.save, .save-button-container .save')
-      await page.waitForTimeout(1000)
     }
 
     return {
