@@ -1,6 +1,6 @@
 # unbounce-mcp
 
-MCP server for publishing landing pages to Unbounce — no UI required. Give Claude or any MCP-compatible client an HTML file and a prompt; get a live URL back.
+MCP server for deploying and editing Unbounce landing pages — no UI required. Give Claude or any MCP-compatible client an HTML file and a prompt; get a live URL back. Edit existing pages with nothing but a plain-English instruction.
 
 ## What it does
 
@@ -9,6 +9,7 @@ MCP server for publishing landing pages to Unbounce — no UI required. Give Cla
 - Sets the page URL (domain + slug)
 - Configures traffic mode (A/B test with custom weights, or Smart Traffic)
 - Publishes the page and returns the live URL
+- **Reads and edits any variant's HTML and CSS with a plain prompt** — change a heading, add a section, update copy, tweak styles — without touching the Unbounce editor
 
 You never touch the Unbounce UI or see the `.unbounce` format.
 
@@ -69,11 +70,23 @@ Deploy /path/to/page1.html, /path/to/page2.html and /path/to/page3.html to Unbou
 
 **Do it all in one go:**
 ```
-I want you to create me a landing page with 3 variants. I want the page be html and to to look and feel like it's an airbnb page. I want the page to be a giveaway        
-contest for a trip to a unique destination. Include standard landing page sections. Have a form that collects email and name to register for the contest. For the different variants 
+I want you to create me a landing page with 3 variants. I want the page be html and to to look and feel like it's an airbnb page. I want the page to be a giveaway
+contest for a trip to a unique destination. Include standard landing page sections. Have a form that collects email and name to register for the contest. For the different variants
  I want you to come up with your own testing strategy for how the 3 variants should differ. I dont need to preview it when youre done just upload it to Unbounce and publish it to unbouncepages.com/vacation-giveaway
 ```
 
+**Edit an existing page with a prompt:**
+```
+Change the heading on variant B to "Only 72 hours left to enter"
+```
+```
+Add a testimonials section to variant A right below the hero
+```
+```
+Update the CTA button color on all variants to match the brand's orange
+```
+
+The client reads the current HTML and CSS first, makes the targeted change, and writes it back — without touching anything else on the page.
 
 Your MCP-compatible client will ask for anything it needs (account, domain, slug) if you don't provide it upfront.
 
@@ -91,6 +104,8 @@ Your MCP-compatible client will ask for anything it needs (account, domain, slug
 | `set_page_url` | Change a page's domain/slug |
 | `set_traffic_mode` | Switch between A/B Test and Smart Traffic |
 | `set_variant_weights` | Set custom A/B split percentages |
+| `get_variant` | Read the current HTML and CSS of a specific variant |
+| `edit_variant` | Update a variant's HTML, CSS, or both with a prompt |
 
 ## Notes
 
