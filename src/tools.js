@@ -16,6 +16,7 @@ import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
   setVariantWeights, publishPage, unpublishPage, deletePage, editVariantHtml, getVariantContent, addVariant,
+  renameVariant,
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
@@ -459,7 +460,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'add_variant',
-    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. You will need to republish the page after adding a variant.',
+    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -469,6 +470,20 @@ export const TOOL_DEFINITIONS = [
         css: { type: 'string', description: 'CSS to write into the new variant (include <style> tags). Omit to keep the duplicate.' },
       },
       required: ['sub_account_id', 'page_id'],
+    },
+  },
+  {
+    name: 'rename_variant',
+    description: 'Rename a variant on an Unbounce page.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter: a, b, c, etc.' },
+        name: { type: 'string', description: 'New display name for the variant.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant', 'name'],
     },
   },
 ]
@@ -672,6 +687,10 @@ export async function handleTool(name, args) {
 
     case 'add_variant': {
       return addVariant(args.sub_account_id, args.page_id, args.html || null, args.css || null)
+    }
+
+    case 'rename_variant': {
+      return renameVariant(args.sub_account_id, args.page_id, args.variant, args.name)
     }
 
     default:

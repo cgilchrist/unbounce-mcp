@@ -16,6 +16,7 @@ import {
   directPublish, directUnpublish, directDelete,
   directSetVariantWeights, directSetTrafficMode, directSetPageUrl,
   directGetVariant, directEditVariant, directGetVariantNumericIds,
+  directRenameVariant,
 } from './direct.js'
 
 let _browser = null
@@ -697,6 +698,15 @@ export async function addVariant(subAccountId, pageId, html, css) {
       numericId: newNumericId,
       status: html || css ? 'created_and_edited' : 'created',
     }
+  })
+}
+
+// ── Rename variant ─────────────────────────────────────────────────────────────
+
+export async function renameVariant(subAccountId, pageId, variantLetter, name) {
+  return withPage(async (page) => {
+    const newName = await directRenameVariant(page, pageId, variantLetter, name)
+    return { variant: variantLetter, name: newName }
   })
 }
 

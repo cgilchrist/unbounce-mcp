@@ -367,3 +367,50 @@ export async function directSetPageUrl(page, pageId, domain, slug) {
 
   return data?.updatePageUrl?.page?.url
 }
+
+// ── Rename variant ─────────────────────────────────────────────────────────────
+
+const VARIANT_RELAY_IDS_QUERY = `
+query GetVariantRelayIds($pageUuid: String!) {
+  page(uuid: $pageUuid) {
+    pageVariants {
+      nodes { id variantId }
+    }
+  }
+}`
+
+const RENAME_VARIANT_MUTATION = `
+mutation RenameVariant($input: RenameVariantInput!) {
+  renameVariant(input: $input) {
+    variant { id name }
+    errors
+  }
+}`
+
+export async function directRenameVariant(page, pageUuid, variantLetter, name) {
+  // Get numeric ID via the existing working path, then derive the relay ID
+  const jwt = await getJwt(page)
+  const variantIds = await directGetVariantNumericIds(page, pageUuid)
+  const numericId = variantIds[variantLetter.toLowerCase()]
+  if (!numericId) throw new Error(`Variant "${variantLetter}" not found on page ${pageUuid}`)
+  const relayId = Buffer.from(`PageVariant-${numericId}`).toString('base64')
+
+  // Make the mutation via page.evaluate so browser cookies + JWT both flow correctly
+  const payload = JSON.stringify({
+    query: RENAME_VARIANT_MUTATION,
+    variables: { input: { variantId: relayId, name } },
+  })
+  const result = await page.evaluate(async ([url, body, token]) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body,
+    })
+    return res.json()
+  }, [GATEWAY, payload, jwt])
+
+  const errors = result?.data?.renameVariant?.errors
+  if (errors?.length) throw new Error(String(errors))
+  if (result?.errors?.length) throw new Error(result.errors.map(e => e.message).join('; '))
+  return result?.data?.renameVariant?.variant?.name
+}
