@@ -646,42 +646,11 @@ export async function addVariant(subAccountId, pageId, html, css) {
     if (!newLetter) throw new Error('Could not identify the newly created variant')
     const newNumericId = updatedIds[newLetter]
 
-    // If content was provided, open the editor and replace it
+    // If content was provided, write it via directEditVariant so full-doc
+    // detection and bundler transforms (CSS scoping, form wrapping, etc.) apply.
     if (html || css) {
       try {
-        const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${newNumericId}/edit`
-        await page.goto(editorUrl)
-        await page.waitForLoadState('load')
-        await page.waitForSelector('#treeToggle', { timeout: 30000 })
-        await page.waitForTimeout(1000)
-
-        if (html) {
-          await page.click('#treeToggle')
-          await page.waitForTimeout(500)
-          await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
-          await page.waitForTimeout(500)
-          await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
-          await page.click('.panel-content a.full-width-button')
-          await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-          await page.evaluate((h) => { document.querySelector('.CodeMirror').CodeMirror.setValue(h) }, html)
-          await page.click('a.save-code-button')
-          await page.waitForTimeout(500)
-        }
-
-        if (css) {
-          await page.click('span.lp-stylesheet.shelf-button')
-          await page.waitForTimeout(300)
-          await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
-          await page.locator('div.menu .menu-item.popup-menu-item').first().click()
-          await page.waitForTimeout(500)
-          await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-          await page.evaluate((c) => { document.querySelector('.CodeMirror').CodeMirror.setValue(c) }, css)
-          await page.click('a.save-code-button.modal-button')
-          await page.waitForTimeout(500)
-        }
-
-        await page.click('a.save-button-container a.save, .save-button-container .save')
-        await page.waitForTimeout(1000)
+        await directEditVariant(page, newNumericId, html || null, css || null, newLetter)
       } catch (err) {
         // Variant was created but content could not be written — do NOT call add_variant again
         return {

@@ -125,7 +125,9 @@ Your MCP-compatible client will ask for anything it needs (account, domain, slug
 | Tool | Description |
 |------|-------------|
 | `get_variant` | Read the current HTML and CSS of a specific variant |
-| `edit_variant` | Update a variant's HTML, CSS, or both with a plain prompt |
+| `edit_variant` | Update a variant's HTML, CSS, or both. Pass a full HTML document (`<!DOCTYPE html>`) to have it automatically bundled (CSS extraction + scoping, form wrapping, body extraction) — same pipeline as `deploy_page`. Pass HTML/CSS fragments to update them directly. |
+| `add_variant` | Add a new variant by duplicating variant A, optionally with new HTML/CSS |
+| `rename_variant` | Rename a variant to a descriptive label (e.g. "Outcome Headline") |
 
 ### Leads
 | Tool | Description |
