@@ -322,6 +322,19 @@ export function transformForms($, variantId) {
   return true
 }
 
+// ── HTML entity decode ─────────────────────────────────────────────────────────
+
+/**
+ * Decode numeric HTML entities in CSS strings (e.g. &#10003; → ✓).
+ * CSS content properties don't support HTML entities — only literal chars
+ * or \XXXX unicode escapes are valid.
+ */
+function decodeHtmlEntities(css) {
+  return css
+    .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+}
+
 // ── High-level transforms ──────────────────────────────────────────────────────
 
 /**
@@ -331,7 +344,7 @@ export function transformForms($, variantId) {
 export function extractCss($) {
   const cssChunks = []
   $('head style').each((_, el) => {
-    const raw = $(el).text()
+    const raw = decodeHtmlEntities($(el).text())
     const bodyScoped = raw.replace(/(?<![a-zA-Z0-9_-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
     const css = scopeCssToContainer(bodyScoped, '#lp-code-1')
     cssChunks.push(css)
@@ -346,7 +359,7 @@ export function extractCss($) {
  */
 export function scopeRawCss(css) {
   // Strip any existing <style> wrapper the caller may have included
-  const raw = css.replace(/^\s*<style[^>]*>/i, '').replace(/<\/style>\s*$/i, '')
+  const raw = decodeHtmlEntities(css.replace(/^\s*<style[^>]*>/i, '').replace(/<\/style>\s*$/i, ''))
   const bodyScoped = raw.replace(/(?<![a-zA-Z0-9_-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
   const scoped = scopeCssToContainer(bodyScoped, '#lp-code-1')
   return `<style>\n${scoped}\n${LAYOUT_OVERRIDES}\n</style>`
