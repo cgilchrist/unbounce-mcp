@@ -7,6 +7,8 @@
  * navigated to the target page's overview.
  */
 
+import { prepareVariantContent, scopeRawCss } from './transform.js'
+
 const GATEWAY = 'https://gateway.unbounce.com/graphql'
 const APP_BASE = 'https://app.unbounce.com'
 
@@ -273,22 +275,44 @@ export async function directGetVariant(page, numericId) {
 
 /**
  * Update the HTML and/or CSS of a variant directly via edit.json + save.xml.
+ *
+ * If newHtml is a full HTML document (starts with <!DOCTYPE or <html), the
+ * bundler transforms are applied automatically: CSS is extracted and scoped,
+ * forms are wrapped for Unbounce, and only the <body> content is injected.
+ * An explicit newCss always takes precedence over CSS extracted from a full doc.
+ *
+ * If newCss is provided without a full-doc newHtml (fragment edit), it is stored
+ * exactly as given — the caller is responsible for correct scoping. This is the
+ * normal case when passing CSS back from get_variant (already scoped). CSS is
+ * only auto-scoped when extracted from a full HTML document.
  */
-export async function directEditVariant(page, numericId, newHtml, newCss) {
+export async function directEditVariant(page, numericId, newHtml, newCss, variantLetter = 'a') {
   // 1. Get JWT + current state
   const jwt = await getJwt(page)
   const { raw, elements, fullResponse } = await fetchVariantState(page, numericId, jwt)
 
-  // 2. Update HTML and/or CSS in the elements array
-  if (newHtml) {
+  // 2. Detect full-doc HTML and apply bundler transforms if needed
+  const isFullDoc = newHtml && /^\s*(<!DOCTYPE|<html)/i.test(newHtml)
+  let resolvedHtml = newHtml || null
+  let resolvedCss = newCss || null
+
+  if (isFullDoc) {
+    const { bodyHtml, cssHtml } = prepareVariantContent(newHtml, variantLetter)
+    resolvedHtml = bodyHtml
+    // Explicit newCss wins; fall back to CSS extracted from the full doc
+    if (!resolvedCss) resolvedCss = cssHtml
+  }
+
+  // 3. Update HTML and/or CSS in the elements array
+  if (resolvedHtml) {
     const el = elements.find(e => e.id === 'lp-code-1') || elements.find(e => e.type === 'lp-code')
     if (!el) throw new Error(`No lp-code element found in variant`)
-    el.content.html = newHtml
+    el.content.html = resolvedHtml
   }
-  if (newCss) {
+  if (resolvedCss) {
     const el = elements.find(e => e.id === 'lp-stylesheet-1') || elements.find(e => e.type === 'lp-stylesheet')
     if (!el) throw new Error(`No lp-stylesheet element found in variant`)
-    el.content.html = newCss
+    el.content.html = resolvedCss
   }
   raw.elements = JSON.stringify(elements)
 

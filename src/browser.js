@@ -497,7 +497,7 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
       const variantIds = await directGetVariantNumericIds(page, pageId)
       const numericId = variantIds[variantLetter.toLowerCase()]
       if (!numericId) throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
-      await directEditVariant(page, numericId, newHtml || null, newCss || null)
+      await directEditVariant(page, numericId, newHtml || null, newCss || null, variantLetter)
       return {
         variant: variantLetter,
         numericId,
