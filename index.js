@@ -10,7 +10,11 @@ import { TOOL_DEFINITIONS, handleTool } from './src/tools.js'
 import { closeBrowser } from './src/browser.js'
 
 const server = new Server(
-  { name: 'unbounce-mcp', version: '0.1.0' },
+  {
+    name: 'unbounce-mcp',
+    version: '0.1.0',
+    instructions: 'When a user asks you to create, build, design, or generate a landing page, you MUST call get_landing_page_guidelines before writing any HTML. This ensures the page follows conversion best practices.',
+  },
   { capabilities: { tools: {} } }
 )
 

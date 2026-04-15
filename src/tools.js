@@ -486,6 +486,11 @@ export const TOOL_DEFINITIONS = [
       required: ['sub_account_id', 'page_id', 'variant', 'name'],
     },
   },
+  {
+    name: 'get_landing_page_guidelines',
+    description: 'Returns landing page best practices and conversion rules. MUST be called before generating any landing page HTML.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ]
 
 export async function handleTool(name, args) {
@@ -691,6 +696,21 @@ export async function handleTool(name, args) {
 
     case 'rename_variant': {
       return renameVariant(args.sub_account_id, args.page_id, args.variant, args.name)
+    }
+
+    case 'get_landing_page_guidelines': {
+      return {
+        rules: [
+          {
+            rule: 'Single form (lead gen pages only)',
+            detail: 'If the landing page is a lead gen page (i.e. it contains a form), there must be exactly one <form> element. Never render two or more forms. CTA buttons in sections where the form is not visible should be anchor links (<a href="#main-form">) that scroll the user to the single form — not separate forms. Pages without a form (e.g. click-through pages) are not subject to this rule.',
+          },
+          {
+            rule: 'No navigation',
+            detail: 'Landing pages must not include navigation menus, header nav bars, or footer link lists. Every outbound link is an exit opportunity that reduces conversion. Omit <nav> elements entirely. The only acceptable links are the primary CTA anchor links and legally required links (privacy policy, terms of service) placed inconspicuously in the footer.',
+          },
+        ],
+      }
     }
 
     default:
