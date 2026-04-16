@@ -721,6 +721,10 @@ export async function handleTool(name, args) {
             rule: 'No navigation',
             detail: 'Landing pages must not include navigation menus, header nav bars, or footer link lists. Every outbound link is an exit opportunity that reduces conversion. Omit <nav> elements entirely. The only acceptable links are the primary CTA anchor links and legally required links (privacy policy, terms of service) placed inconspicuously in the footer.',
           },
+          {
+            rule: 'Variant preview URLs',
+            detail: 'For a published Unbounce page, you can link directly to a specific variant without triggering stats by appending the variant filename to the page URL. For example, if the page URL is https://unbouncepages.com/my-page/, variant A is at https://unbouncepages.com/my-page/a.html and variant B is at https://unbouncepages.com/my-page/b.html. Use these links when sharing a preview with the user after editing and republishing a variant, or when you need to inspect the live output of a specific variant.',
+          },
         ],
       }
     }
