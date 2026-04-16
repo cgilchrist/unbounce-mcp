@@ -350,6 +350,8 @@ function decodeHtmlEntities(css) {
  * Returns a complete <style> block string including layout overrides.
  */
 export function extractCss($) {
+  const linkTags = $('head link[rel="stylesheet"]').map((_, el) => $.html(el)).get().join('\n')
+
   const cssChunks = []
   $('head style').each((_, el) => {
     const raw = decodeHtmlEntities($(el).text())
@@ -358,7 +360,8 @@ export function extractCss($) {
     cssChunks.push(css)
   })
   cssChunks.push(LAYOUT_OVERRIDES)
-  return `<style>\n${cssChunks.join('\n')}\n</style>`
+  const styleBlock = `<style>\n${cssChunks.join('\n')}\n</style>`
+  return linkTags ? `${linkTags}\n${styleBlock}` : styleBlock
 }
 
 /**
