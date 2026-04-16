@@ -1,6 +1,10 @@
 /**
  * Unbounce REST API calls — all authenticated via API key.
  * Docs: https://developer.unbounce.com/api_reference/
+ *
+ * Note: The Unbounce API returns camelCase field names (e.g. variantsCount,
+ * createdAt, lastPublishedAt). We map these to snake_case in our responses
+ * for consistency.
  */
 
 import { UNBOUNCE_API_BASE, requireApiKey } from './config.js'
@@ -42,22 +46,26 @@ export async function getDomains(subAccountId) {
   }))
 }
 
+/**
+ * Fetch all pages from an endpoint, paginating automatically.
+ * Uses a separate count=true call (without with_stats) to get the true total,
+ * then fetches all batches in parallel.
+ */
 async function paginatedFetch(endpoint, baseParams) {
   const limit = 1000
 
-  // Fetch first batch — metadata.count tells us the true total
-  const firstParams = new URLSearchParams(baseParams)
-  firstParams.set('limit', String(limit))
-  firstParams.set('offset', '0')
-  const firstData = await apiFetch(`${endpoint}?${firstParams}`)
-  const total = firstData.metadata?.count ?? firstData.total_count ?? firstData.total ?? firstData.count ?? 0
-  const firstBatch = firstData.pages || []
+  // Get true total via count=true (strip with_stats — not needed for counting)
+  const countParams = new URLSearchParams(baseParams)
+  countParams.set('count', 'true')
+  countParams.delete('with_stats')
+  const countData = await apiFetch(`${endpoint}?${countParams}`)
+  const total = countData.metadata?.count ?? 0
 
-  if (total <= limit) return firstBatch
+  if (total === 0) return []
 
-  // Fetch remaining batches in parallel
-  const offsets = Array.from({ length: Math.ceil((total - limit) / limit) }, (_, i) => (i + 1) * limit)
-  const rest = await Promise.all(
+  // Fetch all batches in parallel
+  const offsets = Array.from({ length: Math.ceil(total / limit) }, (_, i) => i * limit)
+  const results = await Promise.all(
     offsets.map(offset => {
       const p = new URLSearchParams(baseParams)
       p.set('limit', String(limit))
@@ -66,56 +74,41 @@ async function paginatedFetch(endpoint, baseParams) {
     })
   )
 
-  return [...firstBatch, ...rest.flatMap(data => data.pages || [])]
+  return results.flatMap(data => data.pages || [])
 }
 
-export async function getSubAccountPages(subAccountId, { from, to, sortOrder = 'asc', countOnly = false, withStats = false } = {}) {
-  if (withStats) {
-    const base = new URLSearchParams({ sort_order: sortOrder, with_stats: 'true' })
-    if (from) base.set('from', from)
-    if (to) base.set('to', to)
-
-    const mapPage = p => ({
-      id: p.id,
-      name: p.name,
-      url: p.url,
-      state: p.state,
-      created_at: p.created_at,
-      variants_count: p.variants_count,
-      sub_account_id: p.sub_account_id,
-      tests: p.tests ?? null,
-    })
-
-    // Try sub-account endpoint first — with_stats is undocumented here but may work.
-    // This avoids needing broader API key scope required by the top-level /pages endpoint.
-    const subAccountPages = await paginatedFetch(`/sub_accounts/${subAccountId}/pages`, base)
-    if (subAccountPages.length > 0) return subAccountPages.map(mapPage)
-
-    // Fall back to top-level /pages endpoint, filter client-side by sub_account_id.
-    const all = await paginatedFetch('/pages', base)
-    return all.filter(p => String(p.sub_account_id) === String(subAccountId)).map(mapPage)
-  }
-
-  const base = new URLSearchParams({ sort_order: sortOrder })
-  if (from) base.set('from', from)
-  if (to) base.set('to', to)
-
-  // Count-only mode
-  if (countOnly) {
-    const countParams = new URLSearchParams(base)
-    countParams.set('count', 'true')
-    const data = await apiFetch(`/sub_accounts/${subAccountId}/pages?${countParams}`)
-    return { count: data.metadata?.count ?? data.total_count ?? data.total ?? data.count ?? 0 }
-  }
-
-  const all = await paginatedFetch(`/sub_accounts/${subAccountId}/pages`, base)
-  return all.map(p => ({
+function mapPage(p, { includeStats = false } = {}) {
+  const out = {
     id: p.id,
     name: p.name,
     url: p.url,
     state: p.state,
-    created_at: p.created_at,
-  }))
+    created_at: p.createdAt ?? null,
+    last_published_at: p.lastPublishedAt ?? null,
+    variants_count: p.variantsCount ?? null,
+    domain: p.domain ?? null,
+  }
+  if (includeStats) out.tests = p.tests ?? null
+  return out
+}
+
+export async function getSubAccountPages(subAccountId, { from, to, sortOrder = 'asc', countOnly = false, withStats = false } = {}) {
+  const base = new URLSearchParams({ sort_order: sortOrder })
+  if (from) base.set('from', from)
+  if (to) base.set('to', to)
+
+  // Count-only mode — fast single call
+  if (countOnly) {
+    const countParams = new URLSearchParams(base)
+    countParams.set('count', 'true')
+    const data = await apiFetch(`/sub_accounts/${subAccountId}/pages?${countParams}`)
+    return { count: data.metadata?.count ?? 0 }
+  }
+
+  if (withStats) base.set('with_stats', 'true')
+
+  const all = await paginatedFetch(`/sub_accounts/${subAccountId}/pages`, base)
+  return all.map(p => mapPage(p, { includeStats: withStats }))
 }
 
 export async function getSubAccountPageGroups(subAccountId) {
@@ -123,7 +116,7 @@ export async function getSubAccountPageGroups(subAccountId) {
   return (data.pageGroups || data.page_groups || []).map(g => ({
     id: g.id,
     name: g.name,
-    created_at: g.created_at,
+    created_at: g.createdAt ?? g.created_at ?? null,
   }))
 }
 
@@ -134,10 +127,10 @@ export async function getPage(pageId) {
     name: p.name,
     url: p.url,
     state: p.state,
-    created_at: p.created_at,
-    last_published_at: p.last_published_at,
-    variants_count: p.variants_count,
-    domain: p.domain,
+    created_at: p.createdAt ?? p.created_at ?? null,
+    last_published_at: p.lastPublishedAt ?? p.last_published_at ?? null,
+    variants_count: p.variantsCount ?? p.variants_count ?? null,
+    domain: p.domain ?? null,
     tests: p.tests ?? null,
   }
 }
@@ -152,11 +145,11 @@ export async function getPageLeads(pageId, { offset = 0, count = 50 } = {}) {
   return {
     leads: (data.leads || []).map(l => ({
       id: l.id,
-      created_at: l.created_at,
-      form_data: l.form_data,
-      extra_data: l.extra_data,
+      created_at: l.createdAt ?? l.created_at,
+      form_data: l.formData ?? l.form_data,
+      extra_data: l.extraData ?? l.extra_data,
     })),
-    total_count: data.total_count,
+    total_count: data.totalCount ?? data.total_count,
     offset: data.offset,
     count: data.count,
   }
@@ -171,9 +164,9 @@ export async function getUsers() {
   return (data.users || []).map(u => ({
     id: u.id,
     email: u.email,
-    first_name: u.first_name,
-    last_name: u.last_name,
-    created_at: u.created_at,
+    first_name: u.firstName ?? u.first_name,
+    last_name: u.lastName ?? u.last_name,
+    created_at: u.createdAt ?? u.created_at,
   }))
 }
 
