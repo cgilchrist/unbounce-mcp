@@ -16,7 +16,7 @@ import {
   directPublish, directUnpublish, directDelete,
   directSetVariantWeights, directSetTrafficMode, directSetPageUrl,
   directGetVariant, directEditVariant, directGetVariantNumericIds,
-  directRenameVariant,
+  directRenameVariant, directCreateVariantFromScratch, directInitBlankSlate,
 } from './direct.js'
 
 let _browser = null
@@ -612,20 +612,34 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
  */
 export async function addVariant(subAccountId, pageId, html, css) {
   return withPage(async (page) => {
-    // Snapshot existing variants before we add one
+    // --- Direct path (preferred): GraphQL createVariant with blank template ---
+    try {
+      const { variant, numericId } = await directCreateVariantFromScratch(page, pageId, html, css)
+      return { variant, numericId, status: html || css ? 'created_and_edited' : 'created' }
+    } catch (err) {
+      console.error('[direct] createVariantFromScratch failed, falling back to UI:', err.message)
+    }
+
+    // --- Playwright UI fallback ---
+    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
+    await page.waitForLoadState('load')
+
     const existingIds = await getVariantNumericIds(page, subAccountId, pageId)
     const existingLetters = new Set(Object.keys(existingIds))
 
-    // Open the ... flyout and click Add Variant
+    // Open the flyout and click Add Variant
     await page.click('[data-testid="flyout-page-actions"]')
     await page.waitForSelector('[data-testid="flyoutAddVariant"]')
     await page.click('[data-testid="flyoutAddVariant"]')
 
-    // Modal opens — defaults are "Duplicate an existing variant" + "A - Variant A", leave them
+    // Select "Start from scratch" (data-testid="scratch-radiobutton")
     await page.waitForSelector('[data-testid="button-create-variant"]', { timeout: 15000 })
+    const scratchRadio = page.locator('[data-testid="scratch-radiobutton"]')
+    if (await scratchRadio.isVisible()) await scratchRadio.click()
+
     await page.click('[data-testid="button-create-variant"]')
 
-    // Wait for the overview to re-render with the new variant's edit button
+    // Wait for new variant to appear in the overview
     await page.waitForFunction(
       (existing) => {
         const buttons = Array.from(document.querySelectorAll('a[data-testid^="button-edit-"]'))
@@ -636,37 +650,24 @@ export async function addVariant(subAccountId, pageId, html, css) {
       { timeout: 30000 }
     )
 
-    // Identify the new variant letter (highest alpha = most recently added)
     const updatedIds = await getVariantNumericIds(page, subAccountId, pageId)
-    const newLetter = Object.keys(updatedIds)
-      .filter(l => !existingLetters.has(l))
-      .sort()
-      .pop()
-
+    const newLetter = Object.keys(updatedIds).filter(l => !existingLetters.has(l)).sort().pop()
     if (!newLetter) throw new Error('Could not identify the newly created variant')
     const newNumericId = updatedIds[newLetter]
 
-    // If content was provided, write it via directEditVariant so full-doc
-    // detection and bundler transforms (CSS scoping, form wrapping, etc.) apply.
-    if (html || css) {
-      try {
-        await directEditVariant(page, newNumericId, html || null, css || null, newLetter)
-      } catch (err) {
-        // Variant was created but content could not be written — do NOT call add_variant again
-        return {
-          variant: newLetter,
-          numericId: newNumericId,
-          status: 'created',
-          edit_error: `Variant ${newLetter.toUpperCase()} was created but content could not be written: ${err.message}. Call edit_variant with variant: "${newLetter}" to set the HTML/CSS, then republish.`,
-        }
+    // Initialize with blank slate (replaces the blank template's default elements)
+    try {
+      await directInitBlankSlate(page, newNumericId, html, css, newLetter)
+    } catch (initErr) {
+      return {
+        variant: newLetter,
+        numericId: newNumericId,
+        status: 'created',
+        edit_error: `Variant ${newLetter.toUpperCase()} created but blank slate init failed: ${initErr.message}. Call edit_variant with variant: "${newLetter}" to set the HTML/CSS, then republish.`,
       }
     }
 
-    return {
-      variant: newLetter,
-      numericId: newNumericId,
-      status: html || css ? 'created_and_edited' : 'created',
-    }
+    return { variant: newLetter, numericId: newNumericId, status: html || css ? 'created_and_edited' : 'created' }
   })
 }
 

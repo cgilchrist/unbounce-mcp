@@ -414,3 +414,185 @@ export async function directRenameVariant(page, pageUuid, variantLetter, name) {
   if (result?.errors?.length) throw new Error(result.errors.map(e => e.message).join('; '))
   return result?.data?.renameVariant?.variant?.name
 }
+
+// ── Create variant from scratch ────────────────────────────────────────────────
+
+/**
+ * Blank template ID used by the Unbounce UI for "Start from scratch".
+ * base64("PageTemplate-12359") — Unbounce's internal blank page template.
+ */
+const BLANK_TEMPLATE_ID = 'UGFnZVRlbXBsYXRlLTEyMzU5'
+
+const CREATE_VARIANT_MUTATION = `
+mutation CreateVariant($input: CreateVariantInput!) {
+  createVariant(input: $input) {
+    page {
+      challengerVariants { nodes { variantId editPath } }
+    }
+    errors { message }
+  }
+}`
+
+/**
+ * The standard 4-element blank slate used for all MCP-managed variants.
+ * Mirrors mainElements() in packager.js.
+ */
+function blankElements(bodyHtml = '', cssHtml = '') {
+  return [
+    {
+      id: 'lp-pom-root',
+      type: 'lp-pom-root',
+      name: 'Page Root',
+      containerId: null,
+      style: {
+        background: { backgroundColor: 'ffffff' },
+        defaults: { linkDecoration: 'none', color: '000', linkColor: '0000ff' },
+        newBackground: { type: 'solidColor', solidColor: { bgColor: 'ffffff' }, gradient: { baseColor: 'ffffff' } },
+      },
+      geometry: { position: 'relative', margin: 'auto', contentWidth: 1440, visible: true, scale: 1, padding: { top: 0 } },
+      breakpoints: { mobile: { geometry: { visible: true, contentWidth: 320 } } },
+    },
+    {
+      id: 'lp-pom-block-1',
+      type: 'lp-pom-block',
+      name: 'Content',
+      containerId: 'lp-pom-root',
+      style: {
+        background: { fillType: 'solid', backgroundColor: 'ffffff', opacity: 100 },
+        newBackground: { type: 'solidColor', solidColor: { bgColor: 'ffffff' } },
+      },
+      geometry: {
+        position: 'relative',
+        margin: { left: 'auto', right: 'auto', bottom: 0 },
+        offset: { left: 0, top: 0 },
+        borderLocation: 'outside',
+        borderApply: { top: true, right: true, bottom: true, left: true },
+        backgroundImageApply: false,
+        savedBorderState: { left: true, right: true },
+        fitWidthToPage: true,
+        size: { width: 1440, height: 10000 },
+        visible: true,
+        scale: 1,
+      },
+      breakpoints: {
+        mobile: { geometry: { visible: true, size: { width: 320, height: 10000 }, fitWidthToPage: true } },
+      },
+    },
+    {
+      id: 'lp-code-1',
+      type: 'lp-code',
+      name: 'Custom HTML',
+      containerId: 'lp-pom-block-1',
+      geometry: {
+        position: 'absolute',
+        offset: { left: 0, top: 0 },
+        size: { width: 1440, height: 10000 },
+        visible: true,
+        scale: 1,
+        zIndex: 1,
+      },
+      style: { background: { backgroundColor: 'ffffff', opacity: 0 } },
+      content: { type: null, html: bodyHtml, valid: true },
+      breakpoints: {
+        mobile: {
+          geometry: { visible: true, size: { width: 320, height: 10000 } },
+          style: { background: { imageFixed: false } },
+        },
+      },
+    },
+    {
+      id: 'lp-stylesheet-1',
+      type: 'lp-stylesheet',
+      name: 'Page Styles',
+      containerId: null,
+      placement: 'body:after',
+      content: { type: null, html: cssHtml, valid: true },
+      breakpoints: {},
+    },
+  ]
+}
+
+/**
+ * Resolve HTML/CSS content: apply full-doc transforms if needed, scope CSS.
+ */
+function resolveContent(html, css, variantLetter) {
+  let resolvedHtml = ''
+  let resolvedCss = ''
+  if (html) {
+    const isFullDoc = /^\s*(<!DOCTYPE|<html)/i.test(html)
+    if (isFullDoc) {
+      const { bodyHtml, cssHtml } = prepareVariantContent(html, variantLetter)
+      resolvedHtml = bodyHtml
+      resolvedCss = css ? scopeRawCss(css) : cssHtml
+    } else {
+      resolvedHtml = html
+      resolvedCss = css ? scopeRawCss(css) : ''
+    }
+  } else if (css) {
+    resolvedCss = scopeRawCss(css)
+  }
+  return { resolvedHtml, resolvedCss }
+}
+
+/**
+ * Write the blank slate elements (lp-pom-root/block/code/stylesheet) to an
+ * existing variant via edit.json + save.xml. Optionally populate with content.
+ * Called by both the direct and UI-fallback paths of createVariantFromScratch.
+ */
+export async function directInitBlankSlate(page, numericId, html, css, variantLetter) {
+  const jwt = await getJwt(page)
+  const { resolvedHtml, resolvedCss } = resolveContent(html, css, variantLetter)
+  const { raw, fullResponse } = await fetchVariantState(page, numericId, jwt)
+
+  raw.elements = JSON.stringify(blankElements(resolvedHtml, resolvedCss))
+
+  const csrf = await getCsrf(page)
+  const xml = buildSaveXml(fullResponse)
+  const req = page.context().request
+  const saveRes = await req.post(`${APP_BASE}/variants/${numericId}/save.xml`, {
+    headers: {
+      'Content-Type': 'application/xml',
+      'Authorization': `Bearer ${jwt}`,
+      ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+    },
+    data: xml,
+  })
+  if (!saveRes.ok()) {
+    const body = await saveRes.text()
+    throw new Error(`save.xml HTTP ${saveRes.status()}: ${body.slice(0, 200)}`)
+  }
+}
+
+/**
+ * Create a new variant via the GraphQL CreateVariant mutation using the blank
+ * template ("Start from scratch"), then immediately initialize it with the
+ * standard MCP blank slate elements.
+ *
+ * @returns {{ variant: string, numericId: string }}
+ */
+export async function directCreateVariantFromScratch(page, pageId, html, css) {
+  const jwt = await getJwt(page)
+
+  // 1. Create blank variant via GraphQL
+  const data = await gql(page, CREATE_VARIANT_MUTATION, {
+    input: { pageId, templateId: BLANK_TEMPLATE_ID, variantName: 'Variant' },
+  }, jwt)
+
+  const errors = data?.createVariant?.errors
+  if (errors?.length) throw new Error(errors.map(e => e.message).join('; '))
+
+  // 2. Find the new variant from challengerVariants (highest letter = most recently added)
+  const challengers = data?.createVariant?.page?.challengerVariants?.nodes ?? []
+  if (!challengers.length) throw new Error('createVariant returned no challenger variants')
+  const newest = challengers.sort((a, b) => b.variantId.localeCompare(a.variantId))[0]
+
+  const variantLetter = newest.variantId
+  const numericMatch = newest.editPath?.match(/\/variants\/(\d+)\//)
+  if (!numericMatch) throw new Error(`Could not parse numeric ID from editPath: ${newest.editPath}`)
+  const numericId = numericMatch[1]
+
+  // 3. Initialize with blank slate (replaces template default elements)
+  await directInitBlankSlate(page, numericId, html, css, variantLetter)
+
+  return { variant: variantLetter, numericId }
+}
