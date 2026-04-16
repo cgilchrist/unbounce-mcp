@@ -193,7 +193,7 @@ export const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         sub_account_id: { type: 'string' },
-        with_stats: { type: 'boolean', description: 'Include traffic and A/B test stats (visitors, conversions, conversion rate, variants_count, etc.) for each page. Use when filtering or comparing pages by performance. Slower than a plain list.' },
+        with_stats: { type: 'boolean', description: 'Include traffic and A/B test stats (visitors, conversions, conversion rate, variants_count, etc.) for each page. Use when filtering or comparing pages by performance. Slower than a plain list. NOTE: variants_count is the number of additional variants beyond the champion — it is always 1 less than the actual total. A page with variants_count: 0 has exactly 1 variant (no A/B test). A page with variants_count: 1 has 2 variants total, etc.' },
         count_only: { type: 'boolean', description: 'Return only the total count of pages, not the list. Fast — use before fetching all pages or when the user just wants to know how many pages exist.' },
         from: { type: 'string', description: 'ISO 8601 datetime — only return pages created after this date.' },
         to: { type: 'string', description: 'ISO 8601 datetime — only return pages created before this date.' },
@@ -204,7 +204,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'get_page',
-    description: 'Get details of a specific Unbounce page including state, URL, variant count, and publish date.',
+    description: 'Get details of a specific Unbounce page including state, URL, variant count, and publish date. NOTE: variants_count is the number of additional variants beyond the champion — always 1 less than the actual total. variants_count: 0 means exactly 1 variant (no A/B test running).',
     inputSchema: {
       type: 'object',
       properties: {
