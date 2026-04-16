@@ -47,7 +47,7 @@ async function paginatedFetch(endpoint, baseParams) {
   const countParams = new URLSearchParams(baseParams)
   countParams.set('count', 'true')
   const countData = await apiFetch(`${endpoint}?${countParams}`)
-  const total = countData.total_count ?? countData.count ?? 0
+  const total = countData.total_count ?? countData.total ?? countData.count ?? 0
 
   if (total === 0) return []
 
@@ -98,7 +98,7 @@ export async function getSubAccountPages(subAccountId, { from, to, sortOrder = '
     const countParams = new URLSearchParams(base)
     countParams.set('count', 'true')
     const data = await apiFetch(`/sub_accounts/${subAccountId}/pages?${countParams}`)
-    return { count: data.total_count ?? data.count ?? 0 }
+    return { count: data.total_count ?? data.total ?? data.count ?? 0 }
   }
 
   const all = await paginatedFetch(`/sub_accounts/${subAccountId}/pages`, base)
