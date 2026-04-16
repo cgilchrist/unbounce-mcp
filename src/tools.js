@@ -188,11 +188,16 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'list_pages',
-    description: 'List all landing pages in a sub-account, including their status, URL, and creation date.',
+    description: 'List all landing pages in a sub-account. Handles pagination automatically. Use count_only=true to quickly get the total number of pages without fetching the full list. Use with_stats=true when the user asks about traffic, visitors, conversions, or wants to filter/compare pages by performance (e.g. "pages with more than 10,000 visitors") — this is slower but returns stats in a single operation instead of requiring individual get_page calls.',
     inputSchema: {
       type: 'object',
       properties: {
         sub_account_id: { type: 'string' },
+        with_stats: { type: 'boolean', description: 'Include traffic and A/B test stats (visitors, conversions, conversion rate, variants_count, etc.) for each page. Use when filtering or comparing pages by performance. Slower than a plain list.' },
+        count_only: { type: 'boolean', description: 'Return only the total count of pages, not the list. Fast — use before fetching all pages or when the user just wants to know how many pages exist.' },
+        from: { type: 'string', description: 'ISO 8601 datetime — only return pages created after this date.' },
+        to: { type: 'string', description: 'ISO 8601 datetime — only return pages created before this date.' },
+        sort_order: { type: 'string', enum: ['asc', 'desc'], description: 'Sort by creation date. Default: asc.' },
       },
       required: ['sub_account_id'],
     },
@@ -506,8 +511,15 @@ export async function handleTool(name, args) {
     }
 
     case 'list_pages': {
-      const pages = await getSubAccountPages(args.sub_account_id)
-      return { pages, total: pages.length }
+      const result = await getSubAccountPages(args.sub_account_id, {
+        withStats: args.with_stats,
+        countOnly: args.count_only,
+        from: args.from,
+        to: args.to,
+        sortOrder: args.sort_order,
+      })
+      if (args.count_only) return result
+      return { pages: result, total: result.length }
     }
 
     case 'get_page': {
