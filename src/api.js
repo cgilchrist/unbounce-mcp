@@ -73,6 +73,7 @@ export async function getPage(pageId) {
     last_published_at: p.last_published_at,
     variants_count: p.variants_count,
     domain: p.domain,
+    tests: p.tests ?? null,
   }
 }
 
