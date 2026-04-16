@@ -162,7 +162,15 @@ export function scopeCssToContainer(css, scope) {
 
     if (css[i] === '@') {
       const atStart = i
-      while (i < len && css[i] !== '{' && css[i] !== ';') i++
+      while (i < len && css[i] !== '{' && css[i] !== ';') {
+        if (css[i] === '"' || css[i] === "'") {
+          const q = css[i++]
+          while (i < len && css[i] !== q) { if (css[i] === '\\') i++; i++ }
+          if (i < len) i++ // skip closing quote
+        } else {
+          i++
+        }
+      }
       const atHeader = css.slice(atStart, i).trim().toLowerCase()
       const keyword = (atHeader.match(/^@([\w-]+)/) || [])[1] || ''
 
