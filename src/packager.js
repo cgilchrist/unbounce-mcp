@@ -47,12 +47,12 @@ function pageMetadata(name) {
   return { name, champion_variant_id: 'a' }
 }
 
-function variantMetadata(name, hasForm, variantId, weight) {
+function variantMetadata(name, hasForm, variantId, weight, { title = '', description = '', keywords = '' } = {}) {
   return {
     name,
-    title: '',
-    description: '',
-    keywords: '',
+    title,
+    description,
+    keywords,
     variant_id: variantId,
     variant_weight: weight,
     type: 'PageVariant',
@@ -234,9 +234,9 @@ async function writeJson(filePath, data) {
   await fs.promises.writeFile(filePath, JSON.stringify(data))
 }
 
-async function writeVariantFiles(dir, elements, width, hasForm, name, variantId, weight, mainPageRef) {
+async function writeVariantFiles(dir, elements, width, hasForm, name, variantId, weight, mainPageRef, pageMeta = {}) {
   await fs.promises.mkdir(dir, { recursive: true })
-  await writeJson(path.join(dir, 'metadata.json'), variantMetadata(name, hasForm, variantId, weight))
+  await writeJson(path.join(dir, 'metadata.json'), variantMetadata(name, hasForm, variantId, weight, pageMeta))
   await writeJson(path.join(dir, 'settings.json'), variantSettings(width, hasForm, mainPageRef))
   await writeJson(path.join(dir, 'elements.json'), elements)
   await fs.promises.writeFile(path.join(dir, 'styles.json'), '')
@@ -291,10 +291,16 @@ export async function packageToUnbounce(htmlFiles, imageFiles = [], pageName = '
       const combinedCss = extractCss($)
       const bodyHtml = $('body').html() ?? variantHtml
 
+      const pageMeta = {
+        title: $('title').first().text().trim(),
+        description: $('meta[name="description"]').attr('content')?.trim() ?? '',
+        keywords: $('meta[name="keywords"]').attr('content')?.trim() ?? '',
+      }
+
       await fs.promises.mkdir(subVariantDir, { recursive: true })
 
       const variantName = htmlFiles.length === 1 ? 'Variant A' : `Variant ${variantId.toUpperCase()}`
-      await writeVariantFiles(variantDir, mainElements(bodyHtml, combinedCss), 1440, hasForm, variantName, variantId, weight)
+      await writeVariantFiles(variantDir, mainElements(bodyHtml, combinedCss), 1440, hasForm, variantName, variantId, weight, undefined, pageMeta)
 
       await writeJson(path.join(subPageRootDir, 'metadata.json'), {
         name: 'Form Confirmation Page',
