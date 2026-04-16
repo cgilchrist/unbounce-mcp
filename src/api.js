@@ -43,18 +43,21 @@ export async function getDomains(subAccountId) {
 }
 
 async function paginatedFetch(endpoint, baseParams) {
-  // Get total count first
-  const countParams = new URLSearchParams(baseParams)
-  countParams.set('count', 'true')
-  const countData = await apiFetch(`${endpoint}?${countParams}`)
-  const total = countData.metadata?.count ?? countData.total_count ?? countData.total ?? countData.count ?? 0
-
-  if (total === 0) return []
-
   const limit = 1000
-  const offsets = Array.from({ length: Math.ceil(total / limit) }, (_, i) => i * limit)
 
-  const results = await Promise.all(
+  // Fetch first batch — metadata.count tells us the true total
+  const firstParams = new URLSearchParams(baseParams)
+  firstParams.set('limit', String(limit))
+  firstParams.set('offset', '0')
+  const firstData = await apiFetch(`${endpoint}?${firstParams}`)
+  const total = firstData.metadata?.count ?? firstData.total_count ?? firstData.total ?? firstData.count ?? 0
+  const firstBatch = firstData.pages || []
+
+  if (total <= limit) return firstBatch
+
+  // Fetch remaining batches in parallel
+  const offsets = Array.from({ length: Math.ceil((total - limit) / limit) }, (_, i) => (i + 1) * limit)
+  const rest = await Promise.all(
     offsets.map(offset => {
       const p = new URLSearchParams(baseParams)
       p.set('limit', String(limit))
@@ -63,7 +66,7 @@ async function paginatedFetch(endpoint, baseParams) {
     })
   )
 
-  return results.flatMap(data => data.pages || [])
+  return [...firstBatch, ...rest.flatMap(data => data.pages || [])]
 }
 
 export async function getSubAccountPages(subAccountId, { from, to, sortOrder = 'asc', countOnly = false, withStats = false } = {}) {
