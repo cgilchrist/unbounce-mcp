@@ -70,26 +70,30 @@ async function paginatedFetch(endpoint, baseParams) {
 }
 
 export async function getSubAccountPages(subAccountId, { from, to, sortOrder = 'asc', countOnly = false, withStats = false } = {}) {
-  // with_stats is only available on the top-level /pages endpoint.
-  // Fetch all pages with stats there, then filter by sub_account_id client-side.
   if (withStats) {
     const base = new URLSearchParams({ sort_order: sortOrder, with_stats: 'true' })
     if (from) base.set('from', from)
     if (to) base.set('to', to)
 
+    const mapPage = p => ({
+      id: p.id,
+      name: p.name,
+      url: p.url,
+      state: p.state,
+      created_at: p.created_at,
+      variants_count: p.variants_count,
+      sub_account_id: p.sub_account_id,
+      tests: p.tests ?? null,
+    })
+
+    // Try sub-account endpoint first — with_stats is undocumented here but may work.
+    // This avoids needing broader API key scope required by the top-level /pages endpoint.
+    const subAccountPages = await paginatedFetch(`/sub_accounts/${subAccountId}/pages`, base)
+    if (subAccountPages.length > 0) return subAccountPages.map(mapPage)
+
+    // Fall back to top-level /pages endpoint, filter client-side by sub_account_id.
     const all = await paginatedFetch('/pages', base)
-    return all
-      .filter(p => String(p.sub_account_id) === String(subAccountId))
-      .map(p => ({
-        id: p.id,
-        name: p.name,
-        url: p.url,
-        state: p.state,
-        created_at: p.created_at,
-        variants_count: p.variants_count,
-        sub_account_id: p.sub_account_id,
-        tests: p.tests ?? null,
-      }))
+    return all.filter(p => String(p.sub_account_id) === String(subAccountId)).map(mapPage)
   }
 
   const base = new URLSearchParams({ sort_order: sortOrder })
