@@ -61,12 +61,13 @@ const LAYOUT_OVERRIDES = `
   font-size: 16px !important;
   line-height: 1.5 !important;
 }
-#lp-code-1 p, #lp-code-1 h1, #lp-code-1 h2, #lp-code-1 h3,
-#lp-code-1 h4, #lp-code-1 h5, #lp-code-1 h6,
-#lp-code-1 ul, #lp-code-1 ol, #lp-code-1 li,
-#lp-code-1 blockquote, #lp-code-1 pre {
-  margin: revert;
-  padding: revert;
+#lp-code-1 h1, #lp-code-1 h2, #lp-code-1 h3,
+#lp-code-1 h4, #lp-code-1 h5, #lp-code-1 h6 {
+  font-weight: revert;
+}
+body.lp-pom-body {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 `
 
