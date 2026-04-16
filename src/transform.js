@@ -105,7 +105,7 @@ export function scopeCssToContainer(css, scope) {
       .map(sel => {
         const s = sel.trim()
         if (!s) return s
-        if (/^:root\b/.test(s)) return s.replace(/^:root\b/, scope)
+        if (/^:root\b/.test(s)) return `:root, ${s.replace(/^:root\b/, scope)}`
         if (/^html\b/.test(s)) return s.replace(/^html\b/, scope)
         if (/^body\.lp-pom-body/.test(s)) return s
         if (/^body\b/.test(s)) return s
