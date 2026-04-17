@@ -492,6 +492,26 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'set_dynamic_text',
+    description: 'Replace a specific text string on a variant with an Unbounce Dynamic Text Replacement (DTR) tag. The tag lets visitors see personalized text based on a URL query parameter — e.g. passing ?city=Portland swaps "Vancouver" for "Portland". Call get_variant first to confirm the exact text as it appears in the HTML, then call this tool. All occurrences of the text are replaced. After saving, republish the page. Use your best judgement on parameter name (e.g. "Vancouver" → parameter "city") and method ("titlecase" for display text is almost always correct). Tell the user what URL parameter was used so they know how to test it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter: a, b, c, etc.' },
+        text: { type: 'string', description: 'The exact text string to make dynamic (case-sensitive).' },
+        parameter: { type: 'string', description: 'URL query parameter name (e.g. "city", "keyword", "industry"). Infer from context if not specified.' },
+        method: {
+          type: 'string',
+          enum: ['titlecase', 'uppercase', 'lowercase', ''],
+          description: 'Text casing applied to the URL param value. "titlecase" for display text (default). "" to use the value as-is.',
+        },
+      },
+      required: ['sub_account_id', 'page_id', 'variant', 'text', 'parameter'],
+    },
+  },
+  {
     name: 'get_landing_page_guidelines',
     description: 'Returns landing page best practices and conversion rules. MUST be called before generating any landing page HTML.',
     inputSchema: { type: 'object', properties: {} },
@@ -708,6 +728,25 @@ export async function handleTool(name, args) {
 
     case 'rename_variant': {
       return renameVariant(args.sub_account_id, args.page_id, args.variant, args.name)
+    }
+
+    case 'set_dynamic_text': {
+      const { sub_account_id, page_id, variant, text, parameter, method = 'titlecase' } = args
+      const content = await getVariantContent(sub_account_id, page_id, variant)
+      const html = content.html
+      if (!html) throw new Error('No HTML found for this variant.')
+      const tag = `<ub:dynamic method="${method}" parameter="${parameter}" title="Parameter: ${parameter}">${text}</ub:dynamic>`
+      const count = (html.split(text).length - 1)
+      if (count === 0) throw new Error(`Text "${text}" not found in variant ${variant}. Use get_variant to check the exact text.`)
+      const updatedHtml = html.split(text).join(tag)
+      await editVariantHtml(sub_account_id, page_id, variant, updatedHtml, null)
+      return {
+        success: true,
+        replacements: count,
+        parameter,
+        method: method || 'none',
+        preview_tip: `Test by appending ?${parameter}=YourValue to the page URL.`,
+      }
     }
 
     case 'get_landing_page_guidelines': {

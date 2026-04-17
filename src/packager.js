@@ -286,10 +286,22 @@ export async function packageToUnbounce(htmlFiles, imageFiles = [], pageName = '
       let variantHtml = htmlFiles[i].html
       if (imageMap.size > 0) variantHtml = inlineImages(variantHtml, imageMap)
 
-      const $ = cheerio.load(variantHtml)
+      // Stash <ub:dynamic> tags before cheerio so they survive the parse/serialize cycle
+      const ubDynamicStash = []
+      const protectedHtml = variantHtml.replace(/<ub:dynamic\b[^>]*>[\s\S]*?<\/ub:dynamic>/g, (match) => {
+        ubDynamicStash.push(match)
+        return `UB_DYNAMIC_STASH_${ubDynamicStash.length - 1}_END`
+      })
+
+      const $ = cheerio.load(protectedHtml)
       const hasForm = transformForms($, variantId)
       const combinedCss = extractCss($)
-      const bodyHtml = $('body').html() ?? variantHtml
+      let bodyHtml = $('body').html() ?? protectedHtml
+
+      // Restore stashed tags
+      if (ubDynamicStash.length > 0) {
+        bodyHtml = bodyHtml.replace(/UB_DYNAMIC_STASH_(\d+)_END/g, (_, idx) => ubDynamicStash[parseInt(idx)])
+      }
 
       const pageMeta = {
         title: $('title').first().text().trim(),
