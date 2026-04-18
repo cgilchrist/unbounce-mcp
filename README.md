@@ -19,7 +19,20 @@ You never touch the Unbounce UI or see the `.unbounce` format.
 
 In Unbounce: **Account Overview (top right) → API Access (lefthand menu) → Create New API Key (top right)**
 
-### 2. Add to your Claude MCP config
+### 2. Add the MCP server
+
+Pick your client:
+
+<details>
+<summary><strong>Claude — CLI (Claude Code)</strong></summary>
+
+Run this command to add the server:
+
+```bash
+claude mcp add unbounce -- npx -y github:cgilchrist/unbounce-mcp
+```
+
+Then set your API key. Open `~/.claude.json`, find the `unbounce` entry under `mcpServers`, and add an `env` block:
 
 ```json
 {
@@ -34,6 +47,64 @@ In Unbounce: **Account Overview (top right) → API Access (lefthand menu) → C
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><strong>Claude — Desktop App</strong></summary>
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (create it if it doesn't exist):
+
+```json
+{
+  "mcpServers": {
+    "unbounce": {
+      "command": "npx",
+      "args": ["-y", "github:cgilchrist/unbounce-mcp"],
+      "env": {
+        "UNBOUNCE_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+Restart the Claude desktop app after saving.
+
+</details>
+
+<details>
+<summary><strong>Codex — CLI</strong></summary>
+
+Run this command to add the server:
+
+```bash
+codex mcp add unbounce --env UNBOUNCE_API_KEY=your-api-key-here -- npx -y github:cgilchrist/unbounce-mcp
+```
+
+Or add it manually to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.unbounce]
+command = "npx"
+args = ["-y", "github:cgilchrist/unbounce-mcp"]
+env = { UNBOUNCE_API_KEY = "your-api-key-here" }
+```
+
+</details>
+
+<details>
+<summary><strong>Codex — Desktop App</strong></summary>
+
+1. Open **Settings → MCP Servers → Add MCP Server**
+2. Fill in the fields:
+   - **Name:** `unbounce`
+   - **Command:** `npx`
+   - **Arguments:** `-y github:cgilchrist/unbounce-mcp`
+   - **Environment variables:** `UNBOUNCE_API_KEY=your-api-key-here`
+3. Save and restart if prompted.
+
+</details>
 
 ### 3. Install the Playwright browser (one-time)
 

@@ -12,11 +12,161 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import * as crypto from 'crypto'
+import * as zlib from 'zlib'
+import { promisify } from 'util'
 import * as cheerio from 'cheerio'
 import * as tar from 'tar'
 import { transformForms, extractCss } from './transform.js'
 
+const gunzip = promisify(zlib.gunzip)
+
 const VARIANT_LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('')
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UNBOUNCE PUBLISHER BUG — context for future debugging
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Unbounce's publisher does a dumb string-replace across the entire page,
+// injecting:
+//
+//   <META http-equiv="Content-Type" content="text/html; charset=UTF-8" >
+//
+// after EVERY literal occurrence of "<head>" it finds — including inside
+// <script> tag bodies, JavaScript comments, and string literals.
+//
+// If an uploaded HTML file happens to contain a <script> tag whose text
+// content is a JSON-encoded string (i.e. the raw bytes of the script body
+// start with a literal `"` and encode HTML as a JSON value), the injected
+// META tag lands inside that JSON string with unescaped double-quotes.
+// Those unescaped quotes act as JSON string terminators, so JSON.parse()
+// succeeds on the truncated value and then throws:
+//
+//   "Unexpected non-whitespace character after JSON at position 61 (line 2 column 61)"
+//
+// We reproduced this exactly:
+//   raw.replace('<head>', '<head><META http-equiv="Content-Type" content="text/html; charset=UTF-8" >')
+//   → JSON.parse(result) throws the above error at position 61
+//
+// The right fix is for Unbounce to only inject the META into the FIRST
+// structural <head> element (or to use an HTML parser rather than string
+// replace). Until then, we work around it below: if we detect that the
+// HTML to be packaged contains this pattern (a manifest + JSON-encoded
+// template in script tags), we unwrap it — extract the real HTML, inline all
+// assets as data: URIs — and hand plain HTML to the packager so Unbounce's
+// publisher never sees a JSON-encoded string to corrupt.
+//
+// Note: the specific script tag types ("__bundler/manifest", etc.) are just
+// an artifact of whichever tool generated this particular HTML file. The
+// underlying Unbounce bug would affect any HTML where a script tag body
+// contains JSON-encoded content with a <head> string inside it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the HTML contains the script-tag pattern that will be
+ * corrupted by Unbounce's publisher META injection (see note above).
+ */
+function hasJsonEncodedTemplate(html) {
+  return html.includes('type="__bundler/manifest"') || html.includes("type='__bundler/manifest'")
+}
+
+/**
+ * Unwraps a JSON-encoded template from the HTML, inlines all assets, and
+ * returns plain HTML safe for Unbounce's publisher.
+ * Returns null if the expected script tags are missing or malformed.
+ *
+ * Asset inlining strategy:
+ *   - JavaScript files  → inlined as <script> text content
+ *     Reason: <script src="data:text/javascript;base64,..."> is blocked by
+ *     Chrome and Firefox (they restrict script loading from data: URIs).
+ *   - CSS files         → inlined as <style> text content (same reason as JS)
+ *   - Fonts, images, SVG → kept as data: URIs inside url() or src/href
+ *     Reason: data: URIs work fine in CSS url() and img src contexts.
+ *
+ * Blob: URLs are intentionally avoided throughout. They are origin-scoped: a
+ * blob created in the Unbounce editor (app.unbounce.com) is inaccessible
+ * on the published domain (unbouncepages.com).
+ */
+async function unwrapJsonEncodedTemplate(html) {
+  const $ = cheerio.load(html)
+  const manifestEl = $('script[type="__bundler/manifest"]')
+  const templateEl = $('script[type="__bundler/template"]')
+
+  if (!manifestEl.length || !templateEl.length) return null
+
+  let manifest, template
+  try {
+    manifest = JSON.parse(manifestEl.text())
+    template = JSON.parse(templateEl.text())
+  } catch (err) {
+    throw new Error(`JSON-encoded template detected but could not be parsed: ${err.message}`)
+  }
+
+  // Decode every asset (base64, optionally gzip-compressed).
+  // Classify as JS, CSS, or binary so we can inline each appropriately.
+  const jsAssets = {}   // uuid → decoded JS text
+  const cssAssets = {}  // uuid → decoded CSS text
+  const dataUris = {}   // uuid → data: URI (for fonts, images, SVG, etc.)
+
+  await Promise.all(Object.entries(manifest).map(async ([uuid, entry]) => {
+    const bytes = Buffer.from(entry.data, 'base64')
+    const finalBytes = entry.compressed ? await gunzip(bytes) : bytes
+    const mime = entry.mime
+    if (mime === 'text/javascript' || mime === 'application/javascript') {
+      jsAssets[uuid] = finalBytes.toString('utf8')
+    } else if (mime === 'text/css') {
+      cssAssets[uuid] = finalBytes.toString('utf8')
+    } else {
+      dataUris[uuid] = `data:${mime};base64,${finalBytes.toString('base64')}`
+    }
+  }))
+
+  // Step 1: Replace binary asset UUIDs with data: URIs everywhere in the
+  // template (handles font url() in CSS, img src, SVG references, etc.).
+  for (const [uuid, uri] of Object.entries(dataUris)) {
+    template = template.split(uuid).join(uri)
+  }
+
+  // Step 2: Replace <script src="UUID"> with inline <script> content.
+  // Also replace any UUID that appears in a src attribute not as a script tag
+  // (catch-all for remaining JS references).
+  for (const [uuid, jsText] of Object.entries(jsAssets)) {
+    // Escape </script> inside the JS text to prevent premature tag closure.
+    const safeJs = jsText.replace(/<\/script/gi, '<\\/script')
+    // Replace <script ... src="UUID" ...> with inline <script ...>content
+    template = template.replace(
+      new RegExp(`<script([^>]*)\\s+src="${uuid}"([^>]*)>`, 'gi'),
+      (_, before, after) => `<script${before}${after}>${safeJs}`
+    )
+    template = template.replace(
+      new RegExp(`<script([^>]*)\\s+src='${uuid}'([^>]*)>`, 'gi'),
+      (_, before, after) => `<script${before}${after}>${safeJs}`
+    )
+    // Fallback: bare UUID reference not inside a src attribute
+    template = template.split(uuid).join(`data:text/javascript;base64,${Buffer.from(jsText).toString('base64')}`)
+  }
+
+  // Step 3: Replace <link rel="stylesheet" href="UUID"> with inline <style>.
+  // Also replace any CSS UUID that appears in url() or other contexts.
+  for (const [uuid, cssText] of Object.entries(cssAssets)) {
+    template = template.replace(
+      new RegExp(`<link([^>]*)\\s+href="${uuid}"([^>]*)/?>`, 'gi'),
+      (_, before, after) => `<style>${cssText}</style>`
+    )
+    template = template.replace(
+      new RegExp(`<link([^>]*)\\s+href='${uuid}'([^>]*)/?>`, 'gi'),
+      (_, before, after) => `<style>${cssText}</style>`
+    )
+    template = template.split(uuid).join(`data:text/css;base64,${Buffer.from(cssText).toString('base64')}`)
+  }
+
+  // Strip integrity/crossorigin attributes — they reference hashes of the
+  // original external resources and would reject our inlined content.
+  template = template
+    .replace(/\s+integrity="[^"]*"/gi, '')
+    .replace(/\s+crossorigin="[^"]*"/gi, '')
+
+  return template
+}
 
 function newId() {
   return crypto.randomBytes(8).toString('hex')
@@ -284,6 +434,12 @@ export async function packageToUnbounce(htmlFiles, imageFiles = [], pageName = '
       const subVariantDir = path.join(subPageRootDir, 'page_variants', variantId)
 
       let variantHtml = htmlFiles[i].html
+
+      // Unwrap JSON-encoded templates before packaging — see note at top of file.
+      if (hasJsonEncodedTemplate(variantHtml)) {
+        variantHtml = (await unwrapJsonEncodedTemplate(variantHtml)) ?? variantHtml
+      }
+
       if (imageMap.size > 0) variantHtml = inlineImages(variantHtml, imageMap)
 
       // Stash <ub:dynamic> tags before cheerio so they survive the parse/serialize cycle
