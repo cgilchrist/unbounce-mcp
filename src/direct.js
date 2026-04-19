@@ -597,6 +597,46 @@ export async function directCreateVariantFromScratch(page, pageId, html, css) {
   return { variant: variantLetter, numericId }
 }
 
+// ── Page stats ────────────────────────────────────────────────────────────────
+
+const PAGE_STATS_QUERY = `
+query PageStatsProxy($pageUuid: String!, $includeConfidence: Boolean!, $startDate: String, $endDate: String) {
+  statsProxy(pageUuid: $pageUuid, startDate: $startDate, endDate: $endDate) {
+    pageVariantStats {
+      nodes {
+        ...pageVariantStatsFragment
+      }
+    }
+    pageStats {
+      conversions
+      conversionRate
+      visits
+      visitors
+    }
+    lastResetAt
+  }
+}
+fragment pageVariantStatsFragment on PageVariantStats {
+  id
+  confidence @include(if: $includeConfidence)
+  conversions
+  conversionRate
+  conversionRateDelta
+  visits
+  visitors
+  variantId
+}`
+
+export async function directGetPageStats(page, pageId, { startDate, endDate } = {}) {
+  const data = await gql(page, PAGE_STATS_QUERY, {
+    pageUuid: pageId,
+    includeConfidence: true,
+    ...(startDate ? { startDate } : {}),
+    ...(endDate ? { endDate } : {}),
+  })
+  return data?.statsProxy ?? null
+}
+
 // ── Page insights (IBR / traffic recommendations) ─────────────────────────────
 
 const ALL_INSIGHTS_QUERY = `

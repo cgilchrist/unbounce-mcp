@@ -16,7 +16,7 @@ import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
   setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages,
-  getPageInsights, editVariantHtml, getVariantContent, addVariant,
+  getPageInsights, getPageStats, editVariantHtml, getVariantContent, addVariant,
   renameVariant,
 } from './browser.js'
 
@@ -473,6 +473,20 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'get_page_stats',
+    description: 'Get visitors, visits, conversions, and conversion rate for a page — both page-level totals and broken down by variant. Optionally filter by date range. Use this to understand page performance before making optimization decisions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page.' },
+        start_date: { type: 'string', description: 'Start of date range (ISO 8601, e.g. 2026-01-01). Omit for all-time stats.' },
+        end_date: { type: 'string', description: 'End of date range (ISO 8601, e.g. 2026-04-01). Omit for all-time stats.' },
+      },
+      required: ['sub_account_id', 'page_id'],
+    },
+  },
+  {
     name: 'get_page_insights',
     description: 'Get Unbounce Industry Benchmark Report (IBR) insights for a page. Returns available insights only — excluded insights (criteria not met) are omitted. Insights include: industry percentile rank and performance rating (ibr-insights), recommended traffic channels (traffic/trafficChannel), and Smart Traffic recommendations (traffic/estimatedLiftInsight, traffic/deactivateVariant). Use this to understand how a page is performing relative to its industry and what Unbounce recommends to improve it.',
     inputSchema: {
@@ -775,6 +789,14 @@ export async function handleTool(name, args) {
         includeInactiveVariants: include_inactive_variants,
         integrationIds: copy_integrations,
       })
+    }
+
+    case 'get_page_stats': {
+      const stats = await getPageStats(args.sub_account_id, args.page_id, {
+        startDate: args.start_date,
+        endDate: args.end_date,
+      })
+      return stats
     }
 
     case 'get_page_insights': {
