@@ -44,6 +44,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params
   try {
     const result = await handleTool(name, args || {})
+    if (result?._type === 'image') {
+      return {
+        content: [
+          { type: 'image', data: result.data, mimeType: result.mimeType },
+          { type: 'text', text: result.caption ?? '' },
+        ],
+      }
+    }
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }

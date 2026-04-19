@@ -17,7 +17,7 @@ import {
   getUploadCredentials, setPageUrl, setTrafficMode,
   setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages,
   getPageInsights, getPageStats, findPagesByStats, editVariantHtml, getVariantContent, addVariant,
-  renameVariant, getPageVariants, getVariantPreviewUrl,
+  renameVariant, getPageVariants, getVariantPreviewUrl, screenshotVariant,
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
@@ -545,7 +545,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'add_variant',
-    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.\n\nIf the user wants the new variant to be based on or inspired by the existing page design: (1) Call get_page_variants first to identify the champion variant — do not assume it is "a", as the champion changes over time. (2) Call get_variant with the champion\'s letter to read its current HTML and CSS — never guess at the existing content. (3) If you also need to visually inspect the rendered page (published or unpublished), call get_variant_preview_url with the champion\'s variant letter to get a live preview URL — do not ask the user to provide any URLs.',
+    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.\n\nIf the user wants the new variant to be based on or inspired by the existing page design: (1) Call get_page_variants first to identify the champion variant — do not assume it is "a", as the champion changes over time. (2) Call screenshot_variant on the champion to visually inspect the rendered design — this is essential for legacy builder pages where HTML/CSS alone does not convey the visual layout. (3) Call get_variant with the champion\'s letter to read its HTML and CSS — never guess at the existing content. Do not ask the user to provide any URLs or IDs; derive everything from get_page_variants.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -581,6 +581,19 @@ export const TOOL_DEFINITIONS = [
         page_id: { type: 'string', description: 'UUID of the page' },
       },
       required: ['sub_account_id', 'page_id'],
+    },
+  },
+  {
+    name: 'screenshot_variant',
+    description: 'Take a full-page screenshot of a specific variant and return it as an image. Works for both published and unpublished pages. Use this whenever you need to visually inspect a page\'s design — especially before creating a new variant that should match the look and feel of an existing one. This is the right tool for legacy builder pages where you cannot easily read the design from HTML/CSS alone. Call get_page_variants first to identify the correct variant letter (usually the champion), then call this tool.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter: a, b, c, etc.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant'],
     },
   },
   {
@@ -876,6 +889,10 @@ export async function handleTool(name, args) {
       return getPageVariants(args.sub_account_id, args.page_id)
     }
 
+    case 'screenshot_variant': {
+      return screenshotVariant(args.sub_account_id, args.page_id, args.variant)
+    }
+
     case 'get_variant_preview_url': {
       return getVariantPreviewUrl(args.sub_account_id, args.page_id, args.variant)
     }
@@ -911,8 +928,8 @@ export async function handleTool(name, args) {
             detail: 'Landing pages must not include navigation menus, header nav bars, or footer link lists. Every outbound link is an exit opportunity that reduces conversion. Omit <nav> elements entirely. The only acceptable links are the primary CTA anchor links and legally required links (privacy policy, terms of service) placed inconspicuously in the footer.',
           },
           {
-            rule: 'Variant preview URLs',
-            detail: 'For a PUBLISHED page, you can link directly to a specific variant without triggering stats by appending the variant filename to the page URL. For example, if the page URL is https://unbouncepages.com/my-page/, variant A is at https://unbouncepages.com/my-page/a.html and variant B is at https://unbouncepages.com/my-page/b.html. Construct this URL yourself from page.url returned by get_page — never ask the user to provide it. For UNPUBLISHED pages (or any page), use get_variant_preview_url to get a live preview URL that works regardless of publish state. The preview_url in that response is for your own inspection; the share_url is what to give the user if they ask for a preview link.',
+            rule: 'Variant preview URLs and visual inspection',
+            detail: 'To visually inspect a variant (published or unpublished), use screenshot_variant — it returns a full-page rendered image you can see directly. This is the preferred method for understanding a page\'s design before creating a new variant. For a PUBLISHED page, you can also link directly to a variant without triggering stats by appending the variant letter and ".html" to the page URL (e.g. https://unbouncepages.com/my-page/a.html) — construct this from page.url returned by get_page, never ask the user. If a user asks for a shareable preview link, use get_variant_preview_url and give them the share_url.',
           },
         ],
       }

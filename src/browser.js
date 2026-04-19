@@ -463,6 +463,35 @@ export async function getVariantPreviewUrl(subAccountId, pageId, variantLetter) 
   })
 }
 
+export async function screenshotVariant(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
+    await page.waitForLoadState('load')
+
+    const { variants } = await directGetPageVariants(page, pageId)
+    const variant = variants.find(v => v.variant === variantLetter.toLowerCase())
+    if (!variant) throw new Error(`Variant "${variantLetter}" not found on page ${pageId}`)
+    if (!variant.preview_path) throw new Error(`No preview path available for variant ${variantLetter}`)
+
+    // Navigate to the preview wrapper page to obtain the authenticated iframe URL
+    await page.goto(`${UNBOUNCE_APP_BASE}${variant.preview_path}`, { waitUntil: 'networkidle', timeout: 30000 })
+    const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
+    if (!iframeSrc) throw new Error('Preview iframe not found — page may not have loaded')
+
+    // Navigate directly to the iframe URL for a clean screenshot (no Unbounce toolbar)
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
+
+    const buffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+    return {
+      _type: 'image',
+      data: buffer.toString('base64'),
+      mimeType: 'image/jpeg',
+      caption: `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim(),
+    }
+  })
+}
+
 // ── Duplicate page ─────────────────────────────────────────────────────────────
 
 export async function duplicatePage(subAccountId, pageId, { includeInactiveVariants = false, integrationIds = 'all' } = {}) {
