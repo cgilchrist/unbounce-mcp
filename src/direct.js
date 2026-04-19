@@ -652,16 +652,53 @@ query AllInsightsQuery($keys: [String!]) {
   }
 }`
 
-export async function directGetPageInsights(page, pageId) {
-  const data = await gql(page, ALL_INSIGHTS_QUERY, { keys: [`page:${pageId}`] })
-  const insights = data?.allInsights ?? []
-  return insights
+const INSIGHTS_QUERY = `
+query InsightsQuery($identifiers: [InsightIdentifier!]!) {
+  insights(identifiers: $identifiers) {
+    id
+    name
+    key
+    lifecycle
+    payload
+    uxState
+    updatedAt
+  }
+}`
+
+// Additional named insights not returned by AllInsightsQuery
+const EXTRA_INSIGHT_NAMES = ['readability-insights']
+
+function parseInsights(nodes) {
+  return (nodes ?? [])
     .filter(i => i.lifecycle === 'available')
     .map(i => {
       let payload = {}
       try { payload = JSON.parse(i.payload) } catch {}
       return { name: i.name, payload, updatedAt: i.updatedAt }
     })
+}
+
+export async function directGetPageInsights(page, pageId) {
+  const pageKey = `page:${pageId}`
+  const [allData, extraData] = await Promise.all([
+    gql(page, ALL_INSIGHTS_QUERY, { keys: [pageKey] }),
+    gql(page, INSIGHTS_QUERY, {
+      identifiers: EXTRA_INSIGHT_NAMES.map(name => ({ name, key: pageKey })),
+    }),
+  ])
+
+  const seen = new Set()
+  const merged = []
+  for (const insight of [
+    ...parseInsights(allData?.allInsights),
+    ...parseInsights(extraData?.insights),
+  ]) {
+    if (!seen.has(insight.name)) {
+      seen.add(insight.name)
+      merged.push(insight)
+    }
+  }
+  return merged
 }
 
 // ── Search pages ──────────────────────────────────────────────────────────────
