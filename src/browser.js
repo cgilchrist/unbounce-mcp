@@ -595,6 +595,15 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
         const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
         if (iframeSrc) {
           await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
+          // Unbounce lazy-loads images: real CDN URLs sit in data-src-desktop-1x but the
+          // preview replaces src with /assets/ paths that don't work on published pages.
+          // Swap in the CDN src before capturing so Claude gets reusable URLs.
+          await page.evaluate(() => {
+            document.querySelectorAll('img[data-src-desktop-1x], img[data-src-mobile-1x]').forEach(img => {
+              const cdn = img.getAttribute('data-src-desktop-1x') || img.getAttribute('data-src-mobile-1x')
+              if (cdn) img.src = cdn.startsWith('//') ? 'https:' + cdn : cdn
+            })
+          })
           const renderedHtml = await page.evaluate(() => document.documentElement.outerHTML)
           return {
             variant: variantLetter,
