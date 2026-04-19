@@ -16,7 +16,7 @@ import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
   setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages,
-  getPageInsights, getPageStats, editVariantHtml, getVariantContent, addVariant,
+  getPageInsights, getPageStats, findPagesByStats, editVariantHtml, getVariantContent, addVariant,
   renameVariant,
 } from './browser.js'
 
@@ -473,6 +473,23 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'find_pages_by_stats',
+    description: 'Filter pages in a sub-account by their performance stats — visitors, conversions, and conversion rate. Fetches all pages then queries stats in batches of 25. Useful for audits: find pages with no traffic, zero conversions, high performers, etc. Returns matching pages with their stats.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        min_visitors: { type: 'number', description: 'Minimum total visitors.' },
+        max_visitors: { type: 'number', description: 'Maximum total visitors.' },
+        min_conversions: { type: 'number', description: 'Minimum total conversions.' },
+        max_conversions: { type: 'number', description: 'Maximum total conversions.' },
+        min_conversion_rate: { type: 'number', description: 'Minimum conversion rate (percentage, e.g. 5 = 5%).' },
+        max_conversion_rate: { type: 'number', description: 'Maximum conversion rate (percentage, e.g. 5 = 5%).' },
+      },
+      required: ['sub_account_id'],
+    },
+  },
+  {
     name: 'get_page_stats',
     description: 'Get visitors, visits, conversions, and conversion rate for a page — both page-level totals and broken down by variant. Optionally filter by date range. Use this to understand page performance before making optimization decisions.',
     inputSchema: {
@@ -789,6 +806,14 @@ export async function handleTool(name, args) {
         includeInactiveVariants: include_inactive_variants,
         integrationIds: copy_integrations,
       })
+    }
+
+    case 'find_pages_by_stats': {
+      const { sub_account_id, min_visitors, max_visitors, min_conversions, max_conversions, min_conversion_rate, max_conversion_rate } = args
+      const pages = await getSubAccountPages(sub_account_id)
+      const filters = { min_visitors, max_visitors, min_conversions, max_conversions, min_conversion_rate, max_conversion_rate }
+      const results = await findPagesByStats(sub_account_id, pages, filters)
+      return { pages: results, total: results.length }
     }
 
     case 'get_page_stats': {

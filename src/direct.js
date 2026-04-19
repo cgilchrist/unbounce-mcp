@@ -597,6 +597,41 @@ export async function directCreateVariantFromScratch(page, pageId, html, css) {
   return { variant: variantLetter, numericId }
 }
 
+// ── Page stats (bulk, simple) ─────────────────────────────────────────────────
+
+const PAGE_STATS_SIMPLE_QUERY = `
+query PageStatsQuery($pageUuid: String!) {
+  statsProxy(pageUuid: $pageUuid) {
+    pageStats {
+      visitors
+      conversions
+      conversionRate
+    }
+  }
+}`
+
+async function batchedParallel(items, fn, batchSize = 25) {
+  const results = []
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize)
+    results.push(...await Promise.all(batch.map(fn)))
+  }
+  return results
+}
+
+export async function directGetBulkPageStats(page, pageIds) {
+  return batchedParallel(pageIds, async (pageId) => {
+    const data = await gql(page, PAGE_STATS_SIMPLE_QUERY, { pageUuid: pageId })
+    const stats = data?.statsProxy?.pageStats ?? {}
+    return {
+      page_id: pageId,
+      visitors: parseInt(stats.visitors ?? '0', 10),
+      conversions: parseInt(stats.conversions ?? '0', 10),
+      conversion_rate: parseFloat(stats.conversionRate ?? '0'),
+    }
+  })
+}
+
 // ── Page stats ────────────────────────────────────────────────────────────────
 
 const PAGE_STATS_QUERY = `

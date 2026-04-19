@@ -19,6 +19,7 @@ import {
   directRenameVariant, directCreateVariantFromScratch, directInitBlankSlate,
   directFetchDuplicationOptions, directDuplicatePage,
   directSearchPages, directGetPageInsights, directGetPageStats,
+  directGetBulkPageStats,
 } from './direct.js'
 
 let _browser = null
@@ -380,6 +381,34 @@ export async function deletePage(subAccountId, pageId) {
     await page.waitForSelector('[data-testid="confirm-delete-page"]')
     await page.click('[data-testid="confirm-delete-page"]')
     await page.waitForTimeout(1000)
+  })
+}
+
+// ── Find pages by stats ───────────────────────────────────────────────────────
+
+export async function findPagesByStats(subAccountId, pages, filters) {
+  return withPage(async (page) => {
+    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages`)
+    await page.waitForLoadState('load')
+
+    const stats = await directGetBulkPageStats(page, pages.map(p => p.id))
+
+    const statsById = {}
+    for (const s of stats) statsById[s.page_id] = s
+
+    return pages
+      .map(p => ({ ...p, ...statsById[p.id] }))
+      .filter(p => {
+        const s = statsById[p.id]
+        if (!s) return false
+        if (filters.min_visitors !== undefined && s.visitors < filters.min_visitors) return false
+        if (filters.max_visitors !== undefined && s.visitors > filters.max_visitors) return false
+        if (filters.min_conversions !== undefined && s.conversions < filters.min_conversions) return false
+        if (filters.max_conversions !== undefined && s.conversions > filters.max_conversions) return false
+        if (filters.min_conversion_rate !== undefined && s.conversion_rate < filters.min_conversion_rate) return false
+        if (filters.max_conversion_rate !== undefined && s.conversion_rate > filters.max_conversion_rate) return false
+        return true
+      })
   })
 }
 
