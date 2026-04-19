@@ -596,3 +596,50 @@ export async function directCreateVariantFromScratch(page, pageId, html, css) {
 
   return { variant: variantLetter, numericId }
 }
+
+// ── Duplicate page ─────────────────────────────────────────────────────────────
+
+const PAGE_INTEGRATIONS_QUERY = `
+query PageIntegrationsQuery($uuid: String!) {
+  page(uuid: $uuid) {
+    integrations { nodes { label duplicationId } }
+  }
+}`
+
+const PAGE_VARIANTS_QUERY = `
+query VariantsQuery($uuid: String!) {
+  page(uuid: $uuid) {
+    championVariant { pageVariantId variantId }
+    challengerVariants { nodes { pageVariantId variantId } }
+    discardedVariants { nodes { pageVariantId variantId } }
+  }
+}`
+
+const DUPLICATE_PAGE_MUTATION = `
+mutation DuplicatePage($input: DuplicatePageInput!) {
+  duplicatePage(input: $input) {
+    page { uuid name url fullUrl state }
+    errors
+  }
+}`
+
+export async function directFetchDuplicationOptions(page, pageUuid) {
+  const [intData, varData] = await Promise.all([
+    gql(page, PAGE_INTEGRATIONS_QUERY, { uuid: pageUuid }),
+    gql(page, PAGE_VARIANTS_QUERY, { uuid: pageUuid }),
+  ])
+  const integrations = intData?.page?.integrations?.nodes ?? []
+  const p = varData?.page ?? {}
+  const active = [p.championVariant, ...(p.challengerVariants?.nodes ?? [])].filter(Boolean)
+  const inactive = p.discardedVariants?.nodes ?? []
+  return { integrations, active, inactive }
+}
+
+export async function directDuplicatePage(page, pageUuid, variantIds, integrationDuplicationIds) {
+  const data = await gql(page, DUPLICATE_PAGE_MUTATION, {
+    input: { pageUuid, variantIds, integrationDuplicationIds },
+  })
+  const errors = data?.duplicatePage?.errors
+  if (errors?.length) throw new Error(Array.isArray(errors) ? errors.join('; ') : String(errors))
+  return data?.duplicatePage?.page
+}

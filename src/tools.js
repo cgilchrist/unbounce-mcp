@@ -15,7 +15,7 @@ import {
 import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
-  setVariantWeights, publishPage, unpublishPage, deletePage, editVariantHtml, getVariantContent, addVariant,
+  setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, editVariantHtml, getVariantContent, addVariant,
   renameVariant,
 } from './browser.js'
 
@@ -436,6 +436,29 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'duplicate_page',
+    description: 'Duplicate an existing Unbounce page, including its variants and integrations. The new page is created unpublished in the same sub-account. Use set_page_url and publish_page afterwards if needed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page to duplicate.' },
+        include_inactive_variants: {
+          type: 'boolean',
+          description: 'Also copy inactive/discarded variants. Default false.',
+        },
+        copy_integrations: {
+          description: '"all" (default) copies all integrations. "none" copies none. Or pass an array of integration labels to copy selectively, e.g. ["MailChimp"].',
+          oneOf: [
+            { type: 'string', enum: ['all', 'none'] },
+            { type: 'array', items: { type: 'string' } },
+          ],
+        },
+      },
+      required: ['sub_account_id', 'page_id'],
+    },
+  },
+  {
     name: 'get_variant',
     description: 'Read the current HTML and CSS of a specific variant on an Unbounce page. Use this before making edits so you can make targeted changes rather than rewriting from scratch.',
     inputSchema: {
@@ -710,6 +733,14 @@ export async function handleTool(name, args) {
         // Page may not have been published yet
       }
       return { success: true, weights }
+    }
+
+    case 'duplicate_page': {
+      const { sub_account_id, page_id, include_inactive_variants = false, copy_integrations = 'all' } = args
+      return duplicatePage(sub_account_id, page_id, {
+        includeInactiveVariants: include_inactive_variants,
+        integrationIds: copy_integrations,
+      })
     }
 
     case 'get_variant': {

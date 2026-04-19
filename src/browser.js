@@ -17,6 +17,7 @@ import {
   directSetVariantWeights, directSetTrafficMode, directSetPageUrl,
   directGetVariant, directEditVariant, directGetVariantNumericIds,
   directRenameVariant, directCreateVariantFromScratch, directInitBlankSlate,
+  directFetchDuplicationOptions, directDuplicatePage,
 } from './direct.js'
 
 let _browser = null
@@ -378,6 +379,37 @@ export async function deletePage(subAccountId, pageId) {
     await page.waitForSelector('[data-testid="confirm-delete-page"]')
     await page.click('[data-testid="confirm-delete-page"]')
     await page.waitForTimeout(1000)
+  })
+}
+
+// ── Duplicate page ─────────────────────────────────────────────────────────────
+
+export async function duplicatePage(subAccountId, pageId, { includeInactiveVariants = false, integrationIds = 'all' } = {}) {
+  return withPage(async (page) => {
+    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
+    await page.waitForLoadState('load')
+
+    const { integrations, active, inactive } = await directFetchDuplicationOptions(page, pageId)
+
+    const variantIds = includeInactiveVariants
+      ? [...active, ...inactive].map(v => v.pageVariantId)
+      : active.map(v => v.pageVariantId)
+
+    const integrationDuplicationIds = integrationIds === 'all'
+      ? integrations.map(i => i.duplicationId)
+      : integrationIds === 'none'
+        ? []
+        : integrations
+            .filter(i => integrationIds.includes(i.label) || integrationIds.includes(i.duplicationId))
+            .map(i => i.duplicationId)
+
+    const result = await directDuplicatePage(page, pageId, variantIds, integrationDuplicationIds)
+    return {
+      page_id: result.uuid,
+      name: result.name,
+      url: result.url,
+      state: result.state,
+    }
   })
 }
 

@@ -188,6 +188,7 @@ Your MCP-compatible client will ask for anything it needs (account, domain, slug
 | `publish_page` | Publish or republish a page |
 | `unpublish_page` | Take a page offline |
 | `delete_page` | Permanently delete a page |
+| `duplicate_page` | Duplicate a page including its variants and integrations |
 | `set_page_url` | Change a page's domain and slug |
 | `set_traffic_mode` | Switch between A/B Test and Smart Traffic |
 | `set_variant_weights` | Set custom A/B split percentages |
