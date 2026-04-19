@@ -890,7 +890,8 @@ function mapVariant(v, role) {
 }
 
 export async function directGetPageVariants(page, pageUuid) {
-  const data = await gql(page, PAGE_VARIANTS_DETAILED_QUERY, { uuid: pageUuid })
+  const jwt = await getJwt(page)
+  const data = await gql(page, PAGE_VARIANTS_DETAILED_QUERY, { uuid: pageUuid }, jwt)
   const p = data?.page
   if (!p) throw new Error(`No page data returned for UUID ${pageUuid}`)
   const champion = p.championVariant ? mapVariant(p.championVariant, 'champion') : null
