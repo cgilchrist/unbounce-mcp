@@ -573,8 +573,10 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
       directNumericId = variantIds[variantLetter.toLowerCase()]
       if (!directNumericId) throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
       const { html, css } = await directGetVariant(page, directNumericId)
-      // Only return early if we actually got content — legacy builder pages return empty
-      if (html || css) return { variant: variantLetter, numericId: directNumericId, html, css }
+      // Only return early if we got a full page — legacy pages may have partial custom code
+      // (tracking scripts, small snippets) that isn't the actual page content
+      const isFullPage = html && (html.includes('<!DOCTYPE') || html.includes('<html'))
+      if (isFullPage) return { variant: variantLetter, numericId: directNumericId, html, css }
     } catch (err) {
     }
 
@@ -624,8 +626,10 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
     await page.click('a.save-code-button.modal-button')
     await page.waitForTimeout(300)
 
-    // If both are empty this is a legacy builder page — fall back to rendered preview source
-    if (!html && !css) {
+    // If no full-page HTML, this is a legacy builder page — fall back to rendered preview source.
+    // May still have partial custom code (snippets, tracking); include it alongside preview HTML.
+    const isFullPage = html && (html.includes('<!DOCTYPE') || html.includes('<html'))
+    if (!isFullPage) {
       try {
         const { variants } = await directGetPageVariants(page, pageId)
         const variantInfo = variants.find(v => v.variant === variantLetter.toLowerCase())
@@ -640,8 +644,10 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
               numericId,
               html: renderedHtml,
               css: null,
+              custom_code: html || null,
+              custom_css: css || null,
               source: 'rendered_preview',
-              note: 'Legacy builder page — HTML is the rendered page source, not editable lp-code. Use this for structural and content reference when building a new variant; do not attempt to write it back via edit_variant.',
+              note: 'Legacy builder page — HTML is the fully rendered page source (read-only reference). custom_code/custom_css contain any partial snippets in the page\'s custom code block. Do not write rendered HTML back via edit_variant.',
             }
           }
         }
