@@ -838,3 +838,82 @@ export async function directDuplicatePage(page, pageUuid, variantIds, integratio
   if (errors?.length) throw new Error(Array.isArray(errors) ? errors.join('; ') : String(errors))
   return data?.duplicatePage?.page
 }
+
+// ── Page variants (champion + all) ────────────────────────────────────────────
+
+const PAGE_VARIANTS_DETAILED_QUERY = `
+query PageVariantsDetailed($uuid: String!) {
+  page(uuid: $uuid) {
+    state
+    previewPath
+    championVariant {
+      variantId
+      name
+      variantWeight
+      state
+      previewPath
+      updatedAt
+    }
+    challengerVariants {
+      nodes {
+        variantId
+        name
+        variantWeight
+        state
+        previewPath
+        updatedAt
+      }
+    }
+    discardedVariants {
+      nodes {
+        variantId
+        name
+        variantWeight
+        state
+        previewPath
+        updatedAt
+      }
+    }
+  }
+}`
+
+function mapVariant(v, role) {
+  return {
+    variant: v.variantId,
+    name: v.name,
+    weight: v.variantWeight,
+    state: v.state,
+    role,
+    preview_path: v.previewPath ?? null,
+    updated_at: v.updatedAt ?? null,
+  }
+}
+
+export async function directGetPageVariants(page, pageUuid) {
+  const data = await gql(page, PAGE_VARIANTS_DETAILED_QUERY, { uuid: pageUuid })
+  const p = data?.page
+  if (!p) throw new Error(`No page data returned for UUID ${pageUuid}`)
+  const champion = p.championVariant ? mapVariant(p.championVariant, 'champion') : null
+  const challengers = (p.challengerVariants?.nodes ?? []).map(v => mapVariant(v, 'challenger'))
+  const discarded = (p.discardedVariants?.nodes ?? []).map(v => mapVariant(v, 'discarded'))
+  return {
+    page_state: p.state,
+    champion,
+    variants: [champion, ...challengers, ...discarded].filter(Boolean),
+  }
+}
+
+/**
+ * Navigate to a variant's preview page and extract the live iframe URL (with auth token).
+ * The iframe URL is for agent inspection only — it expires and should not be shared with users.
+ * For sharing with users, use the previewPath returned by directGetPageVariants prefixed with APP_BASE.
+ */
+export async function directGetVariantPreviewUrl(page, previewPath) {
+  await page.goto(`${APP_BASE}${previewPath}`, { waitUntil: 'networkidle', timeout: 30000 })
+  const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
+  if (!iframeSrc) throw new Error('Preview iframe not found — the page may not have loaded correctly')
+  return {
+    preview_url: iframeSrc,
+    share_url: `${APP_BASE}${previewPath}`,
+  }
+}

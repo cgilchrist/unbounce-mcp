@@ -19,7 +19,7 @@ import {
   directRenameVariant, directCreateVariantFromScratch, directInitBlankSlate,
   directFetchDuplicationOptions, directDuplicatePage,
   directSearchPages, directGetPageInsights, directGetPageStats,
-  directGetBulkPageStats,
+  directGetBulkPageStats, directGetPageVariants, directGetVariantPreviewUrl,
 } from './direct.js'
 
 let _browser = null
@@ -438,6 +438,28 @@ export async function getPageInsights(subAccountId, pageId) {
 export async function findPages(query) {
   return withPage(async (page) => {
     return directSearchPages(page, query)
+  })
+}
+
+// ── Page variants ─────────────────────────────────────────────────────────────
+
+export async function getPageVariants(subAccountId, pageId) {
+  return withPage(async (page) => {
+    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
+    await page.waitForLoadState('load')
+    return directGetPageVariants(page, pageId)
+  })
+}
+
+export async function getVariantPreviewUrl(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
+    await page.waitForLoadState('load')
+    const { variants } = await directGetPageVariants(page, pageId)
+    const variant = variants.find(v => v.variant === variantLetter.toLowerCase())
+    if (!variant) throw new Error(`Variant "${variantLetter}" not found on page ${pageId}`)
+    if (!variant.preview_path) throw new Error(`No preview path available for variant ${variantLetter}`)
+    return directGetVariantPreviewUrl(page, variant.preview_path)
   })
 }
 

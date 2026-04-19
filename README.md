@@ -202,6 +202,8 @@ Your MCP-compatible client will ask for anything it needs (account, domain, slug
 |------|-------------|
 | `get_variant` | Read the current HTML and CSS of a specific variant |
 | `edit_variant` | Update a variant's HTML, CSS, or both. Pass a full HTML document (`<!DOCTYPE html>`) to have it automatically bundled (CSS extraction + scoping, form wrapping, body extraction) — same pipeline as `deploy_page`. Pass HTML/CSS fragments to update them directly. |
+| `get_page_variants` | List all variants (champion, challengers, discarded) with names, traffic weights, states, and preview paths |
+| `get_variant_preview_url` | Get a live preview URL for any variant — published or unpublished. Returns an agent-inspection URL and a user-shareable link. |
 | `add_variant` | Add a new variant by duplicating variant A, optionally with new HTML/CSS |
 | `rename_variant` | Rename a variant to a descriptive label (e.g. "Outcome Headline") |
 

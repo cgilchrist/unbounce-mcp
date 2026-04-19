@@ -17,7 +17,7 @@ import {
   getUploadCredentials, setPageUrl, setTrafficMode,
   setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages,
   getPageInsights, getPageStats, findPagesByStats, editVariantHtml, getVariantContent, addVariant,
-  renameVariant,
+  renameVariant, getPageVariants, getVariantPreviewUrl,
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
@@ -545,7 +545,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'add_variant',
-    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.',
+    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.\n\nIf the user wants the new variant to be based on or inspired by the existing page design: (1) Call get_page_variants first to identify the champion variant — do not assume it is "a", as the champion changes over time. (2) Call get_variant with the champion\'s letter to read its current HTML and CSS — never guess at the existing content. (3) If you also need to visually inspect the rendered page (published or unpublished), call get_variant_preview_url with the champion\'s variant letter to get a live preview URL — do not ask the user to provide any URLs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -569,6 +569,31 @@ export const TOOL_DEFINITIONS = [
         name: { type: 'string', description: 'New display name for the variant.' },
       },
       required: ['sub_account_id', 'page_id', 'variant', 'name'],
+    },
+  },
+  {
+    name: 'get_page_variants',
+    description: 'Get all variants for an Unbounce page — champion, challengers, and discarded — with their names, traffic weights, states, and preview paths. The champion variant is the primary/control variant (highest weight or designated control). Use this before adding a new variant to identify which variant to read as the design reference, or to understand the current A/B test structure.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+      },
+      required: ['sub_account_id', 'page_id'],
+    },
+  },
+  {
+    name: 'get_variant_preview_url',
+    description: 'Get a live preview URL for a specific variant — works for both published and unpublished pages. Returns two URLs: (1) preview_url — the authenticated iframe URL for agent inspection of the rendered page; (2) share_url — the app.unbounce.com link suitable for sharing with the user. Use this when you need to visually inspect a variant without publishing it, or when a user asks for a preview link.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter: a, b, c, etc.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant'],
     },
   },
   {
@@ -847,6 +872,14 @@ export async function handleTool(name, args) {
       return renameVariant(args.sub_account_id, args.page_id, args.variant, args.name)
     }
 
+    case 'get_page_variants': {
+      return getPageVariants(args.sub_account_id, args.page_id)
+    }
+
+    case 'get_variant_preview_url': {
+      return getVariantPreviewUrl(args.sub_account_id, args.page_id, args.variant)
+    }
+
     case 'set_dynamic_text': {
       const { sub_account_id, page_id, variant, text, parameter, method = 'titlecase' } = args
       const content = await getVariantContent(sub_account_id, page_id, variant)
@@ -879,7 +912,7 @@ export async function handleTool(name, args) {
           },
           {
             rule: 'Variant preview URLs',
-            detail: 'For a published Unbounce page, you can link directly to a specific variant without triggering stats by appending the variant filename to the page URL. For example, if the page URL is https://unbouncepages.com/my-page/, variant A is at https://unbouncepages.com/my-page/a.html and variant B is at https://unbouncepages.com/my-page/b.html. Use these links when sharing a preview with the user after editing and republishing a variant, or when you need to inspect the live output of a specific variant.',
+            detail: 'For a PUBLISHED page, you can link directly to a specific variant without triggering stats by appending the variant filename to the page URL. For example, if the page URL is https://unbouncepages.com/my-page/, variant A is at https://unbouncepages.com/my-page/a.html and variant B is at https://unbouncepages.com/my-page/b.html. Construct this URL yourself from page.url returned by get_page — never ask the user to provide it. For UNPUBLISHED pages (or any page), use get_variant_preview_url to get a live preview URL that works regardless of publish state. The preview_url in that response is for your own inspection; the share_url is what to give the user if they ask for a preview link.',
           },
         ],
       }
