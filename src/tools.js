@@ -442,11 +442,11 @@ export const TOOL_DEFINITIONS = [
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Page name or partial name to search for (case-insensitive).' },
+        name: { type: 'string', description: 'Page name or partial name to search for (case-insensitive).' },
         sub_account_id: { type: 'string', description: 'Search only within this sub-account. Fastest option if already known.' },
         account_id: { type: 'string', description: 'Search all sub-accounts within this account. Used when sub_account_id is unknown.' },
       },
-      required: ['query'],
+      required: ['name'],
     },
   },
   {
@@ -818,7 +818,7 @@ export async function handleTool(name, args) {
     }
 
     case 'find_page': {
-      const pages = await searchPagesByName(args.query, {
+      const pages = await searchPagesByName(args.name, {
         subAccountId: args.sub_account_id,
         accountId: args.account_id,
       })
