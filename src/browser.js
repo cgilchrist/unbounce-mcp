@@ -18,7 +18,7 @@ import {
   directGetVariant, directEditVariant, directGetVariantNumericIds,
   directRenameVariant, directCreateVariantFromScratch, directInitBlankSlate,
   directFetchDuplicationOptions, directDuplicatePage,
-  directSearchPages,
+  directSearchPages, directGetPageInsights,
 } from './direct.js'
 
 let _browser = null
@@ -380,6 +380,16 @@ export async function deletePage(subAccountId, pageId) {
     await page.waitForSelector('[data-testid="confirm-delete-page"]')
     await page.click('[data-testid="confirm-delete-page"]')
     await page.waitForTimeout(1000)
+  })
+}
+
+// ── Page insights ─────────────────────────────────────────────────────────────
+
+export async function getPageInsights(subAccountId, pageId) {
+  return withPage(async (page) => {
+    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
+    await page.waitForLoadState('load')
+    return directGetPageInsights(page, pageId)
   })
 }
 

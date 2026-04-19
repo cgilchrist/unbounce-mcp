@@ -15,7 +15,8 @@ import {
 import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
-  setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages, editVariantHtml, getVariantContent, addVariant,
+  setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages,
+  getPageInsights, editVariantHtml, getVariantContent, addVariant,
   renameVariant,
 } from './browser.js'
 
@@ -472,6 +473,18 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'get_page_insights',
+    description: 'Get Unbounce Industry Benchmark Report (IBR) insights for a page. Returns available insights only — excluded insights (criteria not met) are omitted. Insights include: industry percentile rank and performance rating (ibr-insights), recommended traffic channels (traffic/trafficChannel), and Smart Traffic recommendations (traffic/estimatedLiftInsight, traffic/deactivateVariant). Use this to understand how a page is performing relative to its industry and what Unbounce recommends to improve it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page.' },
+      },
+      required: ['sub_account_id', 'page_id'],
+    },
+  },
+  {
     name: 'get_variant',
     description: 'Read the current HTML and CSS of a specific variant on an Unbounce page. Use this before making edits so you can make targeted changes rather than rewriting from scratch.',
     inputSchema: {
@@ -762,6 +775,11 @@ export async function handleTool(name, args) {
         includeInactiveVariants: include_inactive_variants,
         integrationIds: copy_integrations,
       })
+    }
+
+    case 'get_page_insights': {
+      const insights = await getPageInsights(args.sub_account_id, args.page_id)
+      return { insights, total: insights.length }
     }
 
     case 'get_variant': {

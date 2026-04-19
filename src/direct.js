@@ -597,6 +597,33 @@ export async function directCreateVariantFromScratch(page, pageId, html, css) {
   return { variant: variantLetter, numericId }
 }
 
+// ── Page insights (IBR / traffic recommendations) ─────────────────────────────
+
+const ALL_INSIGHTS_QUERY = `
+query AllInsightsQuery($keys: [String!]) {
+  allInsights(keys: $keys, tags: ["page-overview", "panel-widget"]) {
+    id
+    name
+    key
+    lifecycle
+    payload
+    uxState
+    updatedAt
+  }
+}`
+
+export async function directGetPageInsights(page, pageId) {
+  const data = await gql(page, ALL_INSIGHTS_QUERY, { keys: [`page:${pageId}`] })
+  const insights = data?.allInsights ?? []
+  return insights
+    .filter(i => i.lifecycle === 'available')
+    .map(i => {
+      let payload = {}
+      try { payload = JSON.parse(i.payload) } catch {}
+      return { name: i.name, payload, updatedAt: i.updatedAt }
+    })
+}
+
 // ── Search pages ──────────────────────────────────────────────────────────────
 
 const VIEWER_QUERY = `
