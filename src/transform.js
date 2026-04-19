@@ -66,8 +66,22 @@ const LAYOUT_OVERRIDES = `
   font-weight: revert;
 }
 body.lp-pom-body {
+  height: auto !important;
   margin: 0 !important;
   padding: 0 !important;
+  background-color: transparent !important;
+}
+#lp-code-1 strong, #lp-code-1 b {
+  font-weight: bolder;
+}
+#lp-code-1 em, #lp-code-1 i {
+  font-style: italic;
+}
+#lp-code-1 ul li {
+  list-style: disc outside;
+}
+#lp-code-1 ol li {
+  list-style: decimal outside;
 }
 `
 
