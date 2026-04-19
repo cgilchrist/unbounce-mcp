@@ -580,51 +580,59 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
     } catch (err) {
     }
 
-    // Playwright UI fallback
-    const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
-    const numericId = variantIds[variantLetter.toLowerCase()] ?? directNumericId
-    if (!numericId) {
-      throw new Error(`Variant "${variantLetter}" not found. Available: ${Object.keys(variantIds).join(', ')}`)
+    // Playwright UI fallback — try to read code from the legacy builder editor.
+    // Wrapped in try/catch: legacy drag-and-drop pages with no custom code block
+    // will time out on the tree selectors; that's expected — fall through to preview source.
+    let html = null
+    let css = null
+    let numericId = directNumericId
+
+    try {
+      const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
+      numericId = variantIds[variantLetter.toLowerCase()] ?? directNumericId
+      if (!numericId) throw new Error(`Variant "${variantLetter}" not found. Available: ${Object.keys(variantIds).join(', ')}`)
+
+      const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${numericId}/edit`
+      await page.goto(editorUrl)
+      await page.waitForLoadState('load')
+      await page.waitForSelector('#treeToggle', { timeout: 30000 })
+      await page.waitForTimeout(1000)
+
+      // ── Read HTML ────────────────────────────────────────────────────────────
+      await page.click('#treeToggle')
+      await page.waitForTimeout(500)
+      await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
+      await page.waitForTimeout(500)
+      await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
+      await page.click('.panel-content a.full-width-button')
+      await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+
+      html = await page.evaluate(() =>
+        document.querySelector('.CodeMirror').CodeMirror.getValue()
+      )
+
+      // Close HTML modal
+      await page.click('a.save-code-button')
+      await page.waitForTimeout(500)
+
+      // ── Read CSS ─────────────────────────────────────────────────────────────
+      await page.click('span.lp-stylesheet.shelf-button')
+      await page.waitForTimeout(300)
+      await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
+      await page.locator('div.menu .menu-item.popup-menu-item').first().click()
+      await page.waitForTimeout(500)
+      await page.waitForSelector('.CodeMirror', { timeout: 10000 })
+
+      css = await page.evaluate(() =>
+        document.querySelector('.CodeMirror').CodeMirror.getValue()
+      )
+
+      // Close CSS modal
+      await page.click('a.save-code-button.modal-button')
+      await page.waitForTimeout(300)
+    } catch (uiErr) {
+      console.error('[getVariantContent] UI editor fallback failed (likely legacy page with no code block):', uiErr.message)
     }
-
-    const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${numericId}/edit`
-    await page.goto(editorUrl)
-    await page.waitForLoadState('load')
-    await page.waitForSelector('#treeToggle', { timeout: 30000 })
-    await page.waitForTimeout(1000)
-
-    // ── Read HTML ──────────────────────────────────────────────────────────────
-    await page.click('#treeToggle')
-    await page.waitForTimeout(500)
-    await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
-    await page.waitForTimeout(500)
-    await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
-    await page.click('.panel-content a.full-width-button')
-    await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-
-    const html = await page.evaluate(() =>
-      document.querySelector('.CodeMirror').CodeMirror.getValue()
-    )
-
-    // Close HTML modal
-    await page.click('a.save-code-button')
-    await page.waitForTimeout(500)
-
-    // ── Read CSS ───────────────────────────────────────────────────────────────
-    await page.click('span.lp-stylesheet.shelf-button')
-    await page.waitForTimeout(300)
-    await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
-    await page.locator('div.menu .menu-item.popup-menu-item').first().click()
-    await page.waitForTimeout(500)
-    await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-
-    const css = await page.evaluate(() =>
-      document.querySelector('.CodeMirror').CodeMirror.getValue()
-    )
-
-    // Close CSS modal
-    await page.click('a.save-code-button.modal-button')
-    await page.waitForTimeout(300)
 
     // If no full-page HTML, this is a legacy builder page — fall back to rendered preview source.
     // May still have partial custom code (snippets, tracking); include it alongside preview HTML.
