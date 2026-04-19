@@ -620,8 +620,9 @@ async function batchedParallel(items, fn, batchSize = 25) {
 }
 
 export async function directGetBulkPageStats(page, pageIds) {
+  const jwt = await getJwt(page)
   return batchedParallel(pageIds, async (pageId) => {
-    const data = await gql(page, PAGE_STATS_SIMPLE_QUERY, { pageUuid: pageId })
+    const data = await gql(page, PAGE_STATS_SIMPLE_QUERY, { pageUuid: pageId }, jwt)
     const stats = data?.statsProxy?.pageStats ?? {}
     return {
       page_id: pageId,
@@ -663,12 +664,13 @@ fragment pageVariantStatsFragment on PageVariantStats {
 }`
 
 export async function directGetPageStats(page, pageId, { startDate, endDate } = {}) {
+  const jwt = await getJwt(page)
   const data = await gql(page, PAGE_STATS_QUERY, {
     pageUuid: pageId,
     includeConfidence: true,
     ...(startDate ? { startDate } : {}),
     ...(endDate ? { endDate } : {}),
-  })
+  }, jwt)
   return data?.statsProxy ?? null
 }
 
@@ -715,11 +717,12 @@ function parseInsights(nodes) {
 
 export async function directGetPageInsights(page, pageId) {
   const pageKey = `page:${pageId}`
+  const jwt = await getJwt(page)
   const [allData, extraData] = await Promise.all([
-    gql(page, ALL_INSIGHTS_QUERY, { keys: [pageKey] }),
+    gql(page, ALL_INSIGHTS_QUERY, { keys: [pageKey] }, jwt),
     gql(page, INSIGHTS_QUERY, {
       identifiers: EXTRA_INSIGHT_NAMES.map(name => ({ name, key: pageKey })),
-    }),
+    }, jwt),
   ])
 
   const seen = new Set()
