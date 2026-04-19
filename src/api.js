@@ -172,6 +172,35 @@ export async function getUsers() {
 
 
 /**
+ * Search for pages by name across one sub-account, one account's sub-accounts,
+ * or all accessible accounts. Returns pages with sub_account_id included.
+ */
+export async function searchPagesByName(query, { subAccountId, accountId } = {}) {
+  const lq = query.toLowerCase()
+  const results = []
+
+  if (subAccountId) {
+    const pages = await getSubAccountPages(subAccountId)
+    for (const p of pages) {
+      if (p.name.toLowerCase().includes(lq)) results.push({ ...p, sub_account_id: subAccountId })
+    }
+    return results
+  }
+
+  const accounts = accountId ? [{ id: accountId }] : await getAccounts()
+  for (const account of accounts) {
+    const subAccounts = await getSubAccounts(account.id)
+    await Promise.all(subAccounts.map(async (sa) => {
+      const pages = await getSubAccountPages(sa.id)
+      for (const p of pages) {
+        if (p.name.toLowerCase().includes(lq)) results.push({ ...p, sub_account_id: sa.id })
+      }
+    }))
+  }
+  return results
+}
+
+/**
  * Poll for a new page to appear after upload.
  * @param {string} subAccountId
  * @param {string[]} knownPageIds - page IDs that existed before upload

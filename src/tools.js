@@ -10,12 +10,12 @@ import {
   getAccounts, getSubAccounts, getDomains,
   getSubAccountPages, getSubAccountPageGroups,
   getPage, getPageFormFields, getPageLeads, getLead,
-  getUsers, pollForNewPage, pollPageStatus,
+  getUsers, pollForNewPage, pollPageStatus, searchPagesByName,
 } from './api.js'
 import { uploadPage } from './upload.js'
 import {
   getUploadCredentials, setPageUrl, setTrafficMode,
-  setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, editVariantHtml, getVariantContent, addVariant,
+  setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages, editVariantHtml, getVariantContent, addVariant,
   renameVariant,
 } from './browser.js'
 
@@ -436,6 +436,19 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'find_page',
+    description: 'Search for pages by name. Use this whenever the user refers to a page by name and you need its page_id and sub_account_id. Returns matching pages including sub_account_id required by other tools. If you already know the sub_account_id, pass it to skip the broad search. Otherwise pass account_id to scope to one account, or omit both to search everything.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Page name or partial name to search for (case-insensitive).' },
+        sub_account_id: { type: 'string', description: 'Search only within this sub-account. Fastest option if already known.' },
+        account_id: { type: 'string', description: 'Search all sub-accounts within this account. Used when sub_account_id is unknown.' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'duplicate_page',
     description: 'Duplicate an existing Unbounce page, including its variants and integrations. The new page is created unpublished in the same sub-account. Use set_page_url and publish_page afterwards if needed.',
     inputSchema: {
@@ -733,6 +746,14 @@ export async function handleTool(name, args) {
         // Page may not have been published yet
       }
       return { success: true, weights }
+    }
+
+    case 'find_page': {
+      const pages = await searchPagesByName(args.query, {
+        subAccountId: args.sub_account_id,
+        accountId: args.account_id,
+      })
+      return { pages, total: pages.length }
     }
 
     case 'duplicate_page': {

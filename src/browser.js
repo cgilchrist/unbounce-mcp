@@ -18,6 +18,7 @@ import {
   directGetVariant, directEditVariant, directGetVariantNumericIds,
   directRenameVariant, directCreateVariantFromScratch, directInitBlankSlate,
   directFetchDuplicationOptions, directDuplicatePage,
+  directSearchPages,
 } from './direct.js'
 
 let _browser = null
@@ -379,6 +380,14 @@ export async function deletePage(subAccountId, pageId) {
     await page.waitForSelector('[data-testid="confirm-delete-page"]')
     await page.click('[data-testid="confirm-delete-page"]')
     await page.waitForTimeout(1000)
+  })
+}
+
+// ── Search pages ──────────────────────────────────────────────────────────────
+
+export async function findPages(query) {
+  return withPage(async (page) => {
+    return directSearchPages(page, query)
   })
 }
 

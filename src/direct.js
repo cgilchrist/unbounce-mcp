@@ -597,6 +597,59 @@ export async function directCreateVariantFromScratch(page, pageId, html, css) {
   return { variant: variantLetter, numericId }
 }
 
+// ── Search pages ──────────────────────────────────────────────────────────────
+
+const VIEWER_QUERY = `
+query ViewerQuery {
+  viewer {
+    account { uuid }
+  }
+}`
+
+const PAGES_SEARCH_QUERY = `
+query PagesQuery($uuid: String!, $first: Int!, $after: Int, $wherePage: PageFilterInput) {
+  company(uuid: $uuid) {
+    pages(first: $first, after: $after, wherePage: $wherePage) {
+      nodes {
+        uuid
+        name
+        url
+        fullUrl
+        state
+        lastPublishedAt
+        updatedAt
+      }
+      totalCount
+    }
+  }
+}`
+
+export async function directSearchPages(page, query, { limit = 20, offset = 0 } = {}) {
+  const viewerData = await gql(page, VIEWER_QUERY, {})
+  const companyUuid = viewerData?.viewer?.account?.uuid
+  if (!companyUuid) throw new Error('Could not resolve company UUID from viewer query')
+
+  const data = await gql(page, PAGES_SEARCH_QUERY, {
+    uuid: companyUuid,
+    first: limit,
+    after: offset,
+    wherePage: { nameContains: query },
+  })
+
+  const nodes = data?.company?.pages?.nodes ?? []
+  const totalCount = data?.company?.pages?.totalCount ?? 0
+  return {
+    pages: nodes.map(p => ({
+      page_id: p.uuid,
+      name: p.name,
+      url: p.url ?? p.fullUrl,
+      state: p.state,
+      last_published_at: p.lastPublishedAt ?? null,
+    })),
+    total: totalCount,
+  }
+}
+
 // ── Duplicate page ─────────────────────────────────────────────────────────────
 
 const PAGE_INTEGRATIONS_QUERY = `

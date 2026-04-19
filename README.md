@@ -182,6 +182,7 @@ Your MCP-compatible client will ask for anything it needs (account, domain, slug
 | Tool | Description |
 |------|-------------|
 | `list_pages` | List all pages in a sub-account with status and URL |
+| `find_page` | Search for a page by name across sub-accounts — returns page_id and sub_account_id |
 | `get_page` | Get details of a specific page |
 | `deploy_page` | Full pipeline: package HTML → upload → configure → publish |
 | `upload_unbounce_file` | Upload a pre-packaged `.unbounce` file |
