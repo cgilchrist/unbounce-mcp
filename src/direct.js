@@ -122,26 +122,7 @@ export async function directDelete(page, pageId) {
   if (errors?.length) throw new Error(errors.map(e => e.message).join('; '))
 }
 
-// ── Variant weights ────────────────────────────────────────────────────────────
-
-const CHANGE_WEIGHTS_MUTATION = `
-mutation ChangeVariantWeightsMutation($input: ChangeVariantWeightMutationInput!) {
-  changeVariantWeights(input: $input) {
-    page { id }
-    errors { message path }
-  }
-}`
-
-export async function directSetVariantWeights(page, pageId, weights) {
-  const weightArray = Object.entries(weights).map(([id, weight]) => ({ id, weight }))
-  const data = await gql(page, CHANGE_WEIGHTS_MUTATION, {
-    input: { pageId, weights: weightArray },
-  })
-  const errors = data?.changeVariantWeights?.errors
-  if (errors?.length) throw new Error(errors.map(e => e.message).join('; '))
-}
-
-// ── Traffic mode ───────────────────────────────────────────────────────────────
+// ── Traffic mode + variant weights ────────────────────────────────────────────
 
 const SET_ROUTING_MUTATION = `
 mutation SetRoutingStrategy($input: SetRoutingStrategyInput!) {
@@ -161,6 +142,24 @@ export async function directSetTrafficMode(page, pageId, mode) {
   if (!strategy) throw new Error(`Unknown traffic mode: ${mode}`)
   const data = await gql(page, SET_ROUTING_MUTATION, {
     input: { pageId, strategy, config: null },
+  })
+  const errors = data?.setRoutingStrategy?.errors
+  if (errors?.length) throw new Error(String(errors))
+}
+
+export async function directSetVariantWeights(page, pageId, weights) {
+  // Use SetRoutingStrategy so this works from any starting mode (standard,
+  // smart_traffic, or already weighted) — avoids UI timeout when the page is
+  // in Standard mode and variants are inactive/discarded.
+  const entries = Object.entries(weights)
+  const championId = entries.reduce((best, [id, w]) => w > (weights[best] ?? 0) ? id : best, entries[0][0])
+  const weightArray = entries.map(([id, weight]) => ({ id, weight }))
+  const data = await gql(page, SET_ROUTING_MUTATION, {
+    input: {
+      pageId,
+      strategy: 'weighted',
+      config: { weighted: { championId, weights: weightArray } },
+    },
   })
   const errors = data?.setRoutingStrategy?.errors
   if (errors?.length) throw new Error(String(errors))
