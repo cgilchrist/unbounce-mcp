@@ -560,111 +560,59 @@ async function getVariantNumericIds(page, subAccountId, pageId) {
 }
 
 /**
- * Read the current HTML and CSS of a specific variant from the Unbounce editor.
+ * Read the current HTML and CSS of a specific variant.
+ * Direct path: reads edit.json via API (lp-code-1 + lp-stylesheet-1 elements).
+ * Fallback: navigates to the preview iframe for legacy builder pages.
  * @returns {{ html: string, css: string, variant: string, numericId: string }}
  */
 export async function getVariantContent(subAccountId, pageId, variantLetter) {
   return withPage(async (page) => {
     let directNumericId = null
+    let html = null
+    let css = null
 
-    // Try fully-direct path: GraphQL for IDs + direct API fetch (no Playwright navigation)
+    // Direct path: GraphQL for numeric ID + fetch edit.json (no UI clicking)
     try {
       const variantIds = await directGetVariantNumericIds(page, pageId)
       directNumericId = variantIds[variantLetter.toLowerCase()]
-      if (!directNumericId) throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
-      const { html, css } = await directGetVariant(page, directNumericId)
-      // Only return early if we got a full page — legacy pages may have partial custom code
-      // (tracking scripts, small snippets) that isn't the actual page content
+      if (!directNumericId) throw new Error(`Variant "${variantLetter}" not found. Available: ${Object.keys(variantIds).join(', ')}`)
+      const result = await directGetVariant(page, directNumericId)
+      html = result.html
+      css = result.css
       const isFullPage = html && (html.includes('<!DOCTYPE') || html.includes('<html'))
       if (isFullPage) return { variant: variantLetter, numericId: directNumericId, html, css }
     } catch (err) {
+      console.error('[getVariantContent] Direct path failed:', err.message)
     }
 
-    // Playwright UI fallback — try to read code from the legacy builder editor.
-    // Wrapped in try/catch: legacy drag-and-drop pages with no custom code block
-    // will time out on the tree selectors; that's expected — fall through to preview source.
-    let html = null
-    let css = null
-    let numericId = directNumericId
-
+    // Legacy builder page — content in edit.json is empty; fall back to rendered preview.
+    // Partial custom code (tracking snippets etc.) is preserved alongside the preview HTML.
     try {
-      const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
-      numericId = variantIds[variantLetter.toLowerCase()] ?? directNumericId
-      if (!numericId) throw new Error(`Variant "${variantLetter}" not found. Available: ${Object.keys(variantIds).join(', ')}`)
-
-      const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${numericId}/edit`
-      await page.goto(editorUrl)
-      await page.waitForLoadState('load')
-      await page.waitForSelector('#treeToggle', { timeout: 30000 })
-      await page.waitForTimeout(1000)
-
-      // ── Read HTML ────────────────────────────────────────────────────────────
-      await page.click('#treeToggle')
-      await page.waitForTimeout(500)
-      await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
-      await page.waitForTimeout(500)
-      await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
-      await page.click('.panel-content a.full-width-button')
-      await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-
-      html = await page.evaluate(() =>
-        document.querySelector('.CodeMirror').CodeMirror.getValue()
-      )
-
-      // Close HTML modal
-      await page.click('a.save-code-button')
-      await page.waitForTimeout(500)
-
-      // ── Read CSS ─────────────────────────────────────────────────────────────
-      await page.click('span.lp-stylesheet.shelf-button')
-      await page.waitForTimeout(300)
-      await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
-      await page.locator('div.menu .menu-item.popup-menu-item').first().click()
-      await page.waitForTimeout(500)
-      await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-
-      css = await page.evaluate(() =>
-        document.querySelector('.CodeMirror').CodeMirror.getValue()
-      )
-
-      // Close CSS modal
-      await page.click('a.save-code-button.modal-button')
-      await page.waitForTimeout(300)
-    } catch (uiErr) {
-      console.error('[getVariantContent] UI editor fallback failed (likely legacy page with no code block):', uiErr.message)
-    }
-
-    // If no full-page HTML, this is a legacy builder page — fall back to rendered preview source.
-    // May still have partial custom code (snippets, tracking); include it alongside preview HTML.
-    const isFullPage = html && (html.includes('<!DOCTYPE') || html.includes('<html'))
-    if (!isFullPage) {
-      try {
-        const { variants } = await directGetPageVariants(page, pageId)
-        const variantInfo = variants.find(v => v.variant === variantLetter.toLowerCase())
-        if (variantInfo?.preview_path) {
-          await page.goto(`${UNBOUNCE_APP_BASE}${variantInfo.preview_path}`, { waitUntil: 'networkidle', timeout: 30000 })
-          const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
-          if (iframeSrc) {
-            await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
-            const renderedHtml = await page.evaluate(() => document.documentElement.outerHTML)
-            return {
-              variant: variantLetter,
-              numericId,
-              html: renderedHtml,
-              css: null,
-              custom_code: html || null,
-              custom_css: css || null,
-              source: 'rendered_preview',
-              note: 'Legacy builder page — HTML is the fully rendered page source (read-only reference). custom_code/custom_css contain any partial snippets in the page\'s custom code block. Do not write rendered HTML back via edit_variant.',
-            }
+      const { variants } = await directGetPageVariants(page, pageId)
+      const variantInfo = variants.find(v => v.variant === variantLetter.toLowerCase())
+      if (variantInfo?.preview_path) {
+        await page.goto(`${UNBOUNCE_APP_BASE}${variantInfo.preview_path}`, { waitUntil: 'networkidle', timeout: 30000 })
+        const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
+        if (iframeSrc) {
+          await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
+          const renderedHtml = await page.evaluate(() => document.documentElement.outerHTML)
+          return {
+            variant: variantLetter,
+            numericId: directNumericId,
+            html: renderedHtml,
+            css: null,
+            custom_code: html || null,
+            custom_css: css || null,
+            source: 'rendered_preview',
+            note: 'Legacy builder page — HTML is the fully rendered page source (read-only reference). custom_code/custom_css contain any partial snippets from the custom code block. Do not write rendered HTML back via edit_variant.',
           }
         }
-      } catch (previewErr) {
-        console.error('[getVariantContent] Preview source fallback failed:', previewErr.message)
       }
+    } catch (previewErr) {
+      console.error('[getVariantContent] Preview fallback failed:', previewErr.message)
     }
 
-    return { variant: variantLetter, numericId, html, css }
+    return { variant: variantLetter, numericId: directNumericId, html, css }
   })
 }
 
