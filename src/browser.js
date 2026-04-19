@@ -565,19 +565,22 @@ async function getVariantNumericIds(page, subAccountId, pageId) {
  */
 export async function getVariantContent(subAccountId, pageId, variantLetter) {
   return withPage(async (page) => {
+    let directNumericId = null
+
     // Try fully-direct path: GraphQL for IDs + direct API fetch (no Playwright navigation)
     try {
       const variantIds = await directGetVariantNumericIds(page, pageId)
-      const numericId = variantIds[variantLetter.toLowerCase()]
-      if (!numericId) throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
-      const { html, css } = await directGetVariant(page, numericId)
-      return { variant: variantLetter, numericId, html, css }
+      directNumericId = variantIds[variantLetter.toLowerCase()]
+      if (!directNumericId) throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
+      const { html, css } = await directGetVariant(page, directNumericId)
+      // Only return early if we actually got content — legacy builder pages return empty
+      if (html || css) return { variant: variantLetter, numericId: directNumericId, html, css }
     } catch (err) {
     }
 
     // Playwright UI fallback
     const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
-    const numericId = variantIds[variantLetter.toLowerCase()]
+    const numericId = variantIds[variantLetter.toLowerCase()] ?? directNumericId
     if (!numericId) {
       throw new Error(`Variant "${variantLetter}" not found. Available: ${Object.keys(variantIds).join(', ')}`)
     }
@@ -620,6 +623,32 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
     // Close CSS modal
     await page.click('a.save-code-button.modal-button')
     await page.waitForTimeout(300)
+
+    // If both are empty this is a legacy builder page — fall back to rendered preview source
+    if (!html && !css) {
+      try {
+        const { variants } = await directGetPageVariants(page, pageId)
+        const variantInfo = variants.find(v => v.variant === variantLetter.toLowerCase())
+        if (variantInfo?.preview_path) {
+          await page.goto(`${UNBOUNCE_APP_BASE}${variantInfo.preview_path}`, { waitUntil: 'networkidle', timeout: 30000 })
+          const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
+          if (iframeSrc) {
+            await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
+            const renderedHtml = await page.evaluate(() => document.documentElement.outerHTML)
+            return {
+              variant: variantLetter,
+              numericId,
+              html: renderedHtml,
+              css: null,
+              source: 'rendered_preview',
+              note: 'Legacy builder page — HTML is the rendered page source, not editable lp-code. Use this for structural and content reference when building a new variant; do not attempt to write it back via edit_variant.',
+            }
+          }
+        }
+      } catch (previewErr) {
+        console.error('[getVariantContent] Preview source fallback failed:', previewErr.message)
+      }
+    }
 
     return { variant: variantLetter, numericId, html, css }
   })
