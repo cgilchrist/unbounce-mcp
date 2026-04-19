@@ -370,7 +370,7 @@ export function extractCss($) {
   const cssChunks = []
   $('head style').each((_, el) => {
     const raw = decodeHtmlEntities($(el).text())
-    const bodyScoped = raw.replace(/(?<![a-zA-Z0-9_-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
+    const bodyScoped = raw.replace(/(?<![a-zA-Z0-9_.#-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
     const css = scopeCssToContainer(bodyScoped, '#lp-code-1')
     cssChunks.push(css)
   })
@@ -386,7 +386,7 @@ export function extractCss($) {
 export function scopeRawCss(css) {
   // Strip any existing <style> wrapper the caller may have included
   const raw = decodeHtmlEntities(css.replace(/^\s*<style[^>]*>/i, '').replace(/<\/style>\s*$/i, ''))
-  const bodyScoped = raw.replace(/(?<![a-zA-Z0-9_-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
+  const bodyScoped = raw.replace(/(?<![a-zA-Z0-9_.#-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
   const scoped = scopeCssToContainer(bodyScoped, '#lp-code-1')
   return `<style>\n${scoped}\n${LAYOUT_OVERRIDES}\n</style>`
 }
