@@ -156,7 +156,8 @@ async function withPage(fn) {
   try {
     return await fn(page)
   } catch (err) {
-    if (err.message?.includes('login') || err.message?.includes('401') || err.message?.includes('unauthorized')) {
+    const msg = err.message?.toLowerCase() ?? ''
+    if (msg.includes('login') || msg.includes('401') || msg.includes('unauthorized') || msg.includes('unauthenticated')) {
       await clearSession()
       await doHeadedLogin()
       // Retry once with fresh session
