@@ -41,12 +41,13 @@ async function gql(page, query, variables, jwt) {
 export async function directGetVariantNumericIds(page, pageUuid) {
   const jwt = await getJwt(page)
   const data = await gql(page, `
-    query GetVariantPaths($pageUuid: String!) {
+    query PageVariantGoalsQuery($pageUuid: String!) {
       page(uuid: $pageUuid) {
         pageVariants {
           nodes {
+            id
             variantId
-            editPath
+            hasConversionGoal
           }
         }
       }
@@ -57,10 +58,12 @@ export async function directGetVariantNumericIds(page, pageUuid) {
   const result = {}
   for (const node of nodes) {
     const letter = node.variantId?.toLowerCase()
-    const match = node.editPath?.match(/\/variants\/(\d+)\//)
+    // id is a base64-encoded Relay global ID: "PageVariant-{numericId}"
+    const decoded = Buffer.from(node.id, 'base64').toString('utf8')
+    const match = decoded.match(/PageVariant-(\d+)/)
     if (letter && match) result[letter] = match[1]
   }
-  if (!Object.keys(result).length) throw new Error(`Could not parse numeric IDs from GraphQL editPaths`)
+  if (!Object.keys(result).length) throw new Error(`Could not parse numeric IDs from GraphQL variant IDs`)
   return result
 }
 
