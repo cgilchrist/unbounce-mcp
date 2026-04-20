@@ -135,13 +135,38 @@ mutation SetRoutingStrategy($input: SetRoutingStrategyInput!) {
 const STRATEGY_MAP = {
   ab_test: 'weighted',
   smart_traffic: 'dta',
+  standard: 'single',
 }
 
-export async function directSetTrafficMode(page, pageId, mode) {
+export async function directSetTrafficMode(page, pageId, mode, variantId = null) {
   const strategy = STRATEGY_MAP[mode]
   if (!strategy) throw new Error(`Unknown traffic mode: ${mode}`)
+
+  let config = null
+  if (mode === 'standard') {
+    let champion = variantId
+    if (!champion) {
+      const jwt = await getJwt(page)
+      const data = await gql(page, `
+        query PageVariantsStateQuery($pageUuid: String!) {
+          page(uuid: $pageUuid) {
+            pageVariants { nodes { variantId state } }
+          }
+        }
+      `, { pageUuid: pageId }, jwt)
+      const nodes = data?.page?.pageVariants?.nodes ?? []
+      const active = nodes
+        .filter(n => n.state !== 'discarded')
+        .map(n => n.variantId)
+        .sort()
+      if (!active.length) throw new Error('No active variants found to set as standard champion')
+      champion = active[0]
+    }
+    config = { single: { variantId: champion } }
+  }
+
   const data = await gql(page, SET_ROUTING_MUTATION, {
-    input: { pageId, strategy, config: null },
+    input: { pageId, strategy, config },
   })
   const errors = data?.setRoutingStrategy?.errors
   if (errors?.length) throw new Error(String(errors))

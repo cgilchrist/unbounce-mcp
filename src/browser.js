@@ -246,23 +246,11 @@ export async function setPageUrl(subAccountId, pageId, domain, slug) {
 /**
  * @param {string} mode - 'smart_traffic' | 'ab_test'
  */
-export async function setTrafficMode(subAccountId, pageId, mode) {
+export async function setTrafficMode(subAccountId, pageId, mode, variantId = null) {
   return withPage(async (page) => {
     await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
     await page.waitForLoadState('load')
-
-    try {
-      await directSetTrafficMode(page, pageId, mode)
-      return
-    } catch (err) {
-      console.error('[direct] setTrafficMode failed, falling back to UI:', err.message)
-    }
-
-    // UI fallback
-    const testId = mode === 'smart_traffic' ? 'label-smartTraffic' : 'label-abTest'
-    await page.waitForSelector(`[data-testid="${testId}"]`)
-    await page.click(`[data-testid="${testId}"]`)
-    await page.waitForTimeout(500)
+    await directSetTrafficMode(page, pageId, mode, variantId)
   })
 }
 
@@ -283,24 +271,7 @@ export async function setVariantWeights(subAccountId, pageId, weights) {
     await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
     await page.waitForLoadState('load')
 
-    try {
-      await directSetVariantWeights(page, pageId, weights)
-      return
-    } catch (err) {
-      console.error('[direct] setVariantWeights failed, falling back to UI:', err.message)
-    }
-
-    // UI fallback
-    const firstVariant = Object.keys(weights)[0]
-    await page.waitForSelector(`[data-testid="variant-weight-${firstVariant}"]`)
-    await page.click(`[data-testid="variant-weight-${firstVariant}"]`)
-    await page.waitForSelector('[data-testid="button-confirm"]')
-    for (const [variantId, weight] of Object.entries(weights)) {
-      const input = page.locator(`[data-testid="modal-input-${variantId}"]`)
-      await input.fill(String(weight))
-    }
-    await page.click('[data-testid="button-confirm"]')
-    await page.waitForLoadState('load')
+    await directSetVariantWeights(page, pageId, weights)
   })
 }
 

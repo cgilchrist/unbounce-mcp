@@ -405,7 +405,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'set_traffic_mode',
-    description: 'Switch a multi-variant page between A/B Test and Smart Traffic modes. If the page is published, it will be republished automatically.',
+    description: 'Switch a page traffic mode. Modes: standard (all traffic to one variant), ab_test (manual split), smart_traffic (AI-optimised). If the page is published, it will be republished automatically.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -413,7 +413,11 @@ export const TOOL_DEFINITIONS = [
         page_id: { type: 'string' },
         mode: {
           type: 'string',
-          enum: ['ab_test', 'smart_traffic'],
+          enum: ['standard', 'ab_test', 'smart_traffic'],
+        },
+        variant_id: {
+          type: 'string',
+          description: 'For standard mode: which variant letter (a, b, c…) receives all traffic. Defaults to "a".',
         },
       },
       required: ['sub_account_id', 'page_id', 'mode'],
@@ -806,7 +810,7 @@ export async function handleTool(name, args) {
     }
 
     case 'set_traffic_mode': {
-      await setTrafficMode(args.sub_account_id, args.page_id, args.mode)
+      await setTrafficMode(args.sub_account_id, args.page_id, args.mode, args.variant_id ?? null)
       // Republish if page was published
       try {
         await publishPage(args.sub_account_id, args.page_id)
