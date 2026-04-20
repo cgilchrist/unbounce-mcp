@@ -566,16 +566,18 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
         const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
         if (iframeSrc) {
           await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
-          // Unbounce lazy-loads images: real CDN URLs sit in data-src-desktop-1x but the
-          // preview replaces src with /assets/ paths that don't work on published pages.
-          // Swap in the CDN src before capturing so Claude gets reusable URLs.
+          // Swap lazy-loaded img srcs before capture (preview sets src to /assets/ path).
           await page.evaluate(() => {
             document.querySelectorAll('img[data-src-desktop-1x], img[data-src-mobile-1x]').forEach(img => {
               const cdn = img.getAttribute('data-src-desktop-1x') || img.getAttribute('data-src-mobile-1x')
               if (cdn) img.src = cdn.startsWith('//') ? 'https:' + cdn : cdn
             })
           })
-          const renderedHtml = await page.evaluate(() => document.documentElement.outerHTML)
+          // Replace app.unbouncepreview.com with app.unbounce.com throughout — this
+          // normalises all image-service URLs (src, data-src-*, srcset, CSS background-image)
+          // so Unbounce's publish pipeline remaps them to CDN identically to builder pages.
+          const renderedHtml = (await page.evaluate(() => document.documentElement.outerHTML))
+            .replace(/app\.unbouncepreview\.com/g, 'app.unbounce.com')
           return {
             variant: variantLetter,
             numericId: directNumericId,
@@ -584,7 +586,18 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
             custom_code: html || null,
             custom_css: css || null,
             source: 'rendered_preview',
-            note: 'Legacy builder page — HTML is the fully rendered page source (read-only reference). custom_code/custom_css contain any partial snippets from the custom code block. Do not write rendered HTML back via edit_variant.',
+            note: [
+              'Legacy builder page — HTML is the fully rendered page source (read-only reference).',
+              'custom_code/custom_css contain any partial snippets from the custom code block.',
+              'Do not write this rendered HTML back via edit_variant.',
+              '',
+              'IMAGE REUSE INSTRUCTIONS: All image URLs in this HTML have been normalised to',
+              'use app.unbounce.com (not app.unbouncepreview.com). You may copy any image URL',
+              'verbatim into a new custom-code variant — in <img> src/srcset/data-src-* attributes',
+              'and in CSS background-image: url(...) rules. Unbounce\'s publish pipeline remaps',
+              'all image-service.unbounce.com/app.unbounce.com URLs to its CDN automatically,',
+              'for custom-code variants identically to builder pages.',
+            ].join('\n'),
           }
         }
       }
