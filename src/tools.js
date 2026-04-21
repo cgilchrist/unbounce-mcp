@@ -6,6 +6,7 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { packageToUnbounce } from './packager.js'
+import { VARIANT_CREATION_RULES } from './variant-rules.js'
 import {
   getAccounts, getSubAccounts, getDomains,
   getSubAccountPages, getSubAccountPageGroups,
@@ -928,7 +929,8 @@ export async function handleTool(name, args) {
     }
 
     case 'get_variant': {
-      return getVariantContent(args.sub_account_id, args.page_id, args.variant)
+      const variantResult = await getVariantContent(args.sub_account_id, args.page_id, args.variant)
+      return { ...variantResult, creation_rules: VARIANT_CREATION_RULES }
     }
 
     case 'edit_variant': {

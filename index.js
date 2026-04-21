@@ -8,6 +8,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js'
 import { TOOL_DEFINITIONS, handleTool } from './src/tools.js'
 import { closeBrowser } from './src/browser.js'
+import { VARIANT_CREATION_RULES } from './src/variant-rules.js'
 
 const server = new Server(
   {
@@ -38,13 +39,7 @@ When a user asks you to add or create a variant on an existing page, you MUST do
 3. Call get_variant on the champion to read its HTML and CSS.
 Then ensure the new variant preserves the existing brand identity — colors, typography, spacing, imagery, and overall visual language — unless the user explicitly asks to change them. Layout structure may vary freely; it is the visual brand that must stay consistent. The user should not need to say "keep it on brand"; that is always the default.
 
-Specific rules that are ALWAYS enforced when creating a new variant:
-
-LOGO: If the original variant has a logo, the new variant MUST use the exact same logo image at the same size. Never substitute text, a placeholder, or a different logo.
-
-IMAGERY: If the original variant has real photos or images (headshots, product shots, backgrounds, etc.), reuse those same images in the new variant unless the explicit purpose of the test is to try different imagery. Never replace real photos with placeholder avatars, initials, icons, or generated alternatives.
-
-FONTS: Identify the brand fonts using two signals in the original variant's HTML: (1) any script tag containing window.ub.page.webFonts — e.g. window.ub.page.webFonts = ['Jost:700,regular,600,300italic'] — this is Unbounce's mechanism for loading Google Fonts, and the font names listed there are the brand fonts; (2) font-family declarations throughout inline styles, <style> blocks, or linked stylesheets. Whatever font-family names appear — e.g. "Jost", "Montserrat", "Playfair Display" — you MUST use those same fonts in the new variant for the same text roles (headings, body, CTAs, labels). If the original has visible @import or <link> tags for those fonts, copy them verbatim. If the font is declared via window.ub.page.webFonts or has no visible load tag, add a standard Google Fonts <link> tag for the same font and weights yourself. Do not substitute system fonts or invent different typefaces.
+${VARIANT_CREATION_RULES}
 
 When setting up an A/B test on a page that was in standard mode (single variant), follow this exact order:
 1. set_traffic_mode(ab_test) — switch to A/B test routing FIRST. Do this before activate_variant, because activate_variant behaves differently per mode: in standard mode it replaces the champion (wrong); in A/B test mode it adds the variant as a challenger (correct).
