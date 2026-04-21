@@ -536,29 +536,33 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'edit_variant',
-    description: 'Update the HTML and/or CSS of a specific variant on an Unbounce page without re-uploading. Provide html, css, or both. Changes are saved immediately. You will need to publish/republish the page after editing.',
+    description: 'Update the HTML and/or CSS of a specific variant on an Unbounce page without re-uploading. Provide html/css inline or via file paths (html_file_path/css_file_path) — use file paths for large HTML that would exceed tool parameter limits. Changes are saved immediately. You will need to publish/republish the page after editing.',
     inputSchema: {
       type: 'object',
       properties: {
         sub_account_id: { type: 'string' },
         page_id: { type: 'string', description: 'UUID of the page' },
         variant: { type: 'string', description: 'Variant letter: a, b, c, d, etc.' },
-        html: { type: 'string', description: 'Full HTML content. Omit to leave unchanged.' },
-        css: { type: 'string', description: 'Full CSS content (include <style> tags). Omit to leave unchanged.' },
+        html: { type: 'string', description: 'Full HTML content as a string. Use html_file_path instead for large files.' },
+        css: { type: 'string', description: 'Full CSS content (include <style> tags). Use css_file_path instead for large files.' },
+        html_file_path: { type: 'string', description: 'Absolute path to an HTML file on disk. Use instead of html for large files.' },
+        css_file_path: { type: 'string', description: 'Absolute path to a CSS file on disk. Use instead of css for large files.' },
       },
       required: ['sub_account_id', 'page_id', 'variant'],
     },
   },
   {
     name: 'add_variant',
-    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.',
+    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css (inline or via file paths) to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.',
     inputSchema: {
       type: 'object',
       properties: {
         sub_account_id: { type: 'string' },
         page_id: { type: 'string', description: 'UUID of the page' },
-        html: { type: 'string', description: 'HTML to write into the new variant. Omit to keep the duplicate of variant A.' },
-        css: { type: 'string', description: 'CSS to write into the new variant (include <style> tags). Omit to keep the duplicate.' },
+        html: { type: 'string', description: 'HTML to write into the new variant as a string. Use html_file_path instead for large files.' },
+        css: { type: 'string', description: 'CSS to write into the new variant (include <style> tags). Use css_file_path instead for large files.' },
+        html_file_path: { type: 'string', description: 'Absolute path to an HTML file on disk. Use instead of html for large files.' },
+        css_file_path: { type: 'string', description: 'Absolute path to a CSS file on disk. Use instead of css for large files.' },
       },
       required: ['sub_account_id', 'page_id'],
     },
@@ -934,13 +938,17 @@ export async function handleTool(name, args) {
     }
 
     case 'edit_variant': {
-      if (!args.html && !args.css) throw new Error('Provide at least one of: html, css')
-      const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, args.html || null, args.css || null)
+      const html = args.html || (args.html_file_path ? await fs.promises.readFile(args.html_file_path, 'utf8') : null)
+      const css = args.css || (args.css_file_path ? await fs.promises.readFile(args.css_file_path, 'utf8') : null)
+      if (!html && !css) throw new Error('Provide at least one of: html, css, html_file_path, css_file_path')
+      const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, html, css)
       return result
     }
 
     case 'add_variant': {
-      return addVariant(args.sub_account_id, args.page_id, args.html || null, args.css || null)
+      const html = args.html || (args.html_file_path ? await fs.promises.readFile(args.html_file_path, 'utf8') : null)
+      const css = args.css || (args.css_file_path ? await fs.promises.readFile(args.css_file_path, 'utf8') : null)
+      return addVariant(args.sub_account_id, args.page_id, html, css)
     }
 
     case 'rename_variant': {
