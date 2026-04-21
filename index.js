@@ -31,6 +31,12 @@ The terms "client", "sub-account", and "company" refer to the same object. The R
 When a user refers to a page by name without providing IDs, use find_page to locate it before proceeding.
 
 When a user asks you to create, build, design, or generate a landing page, you MUST call get_landing_page_guidelines before writing any HTML.
+
+When a user asks you to add or create a variant on an existing page, you MUST do all of the following before writing any HTML or CSS:
+1. Call get_page_variants to identify the champion variant — do not assume it is "a".
+2. Call screenshot_variant on the champion to visually understand the current design.
+3. Call get_variant on the champion to read its HTML and CSS.
+Then ensure the new variant preserves the existing brand identity — colors, typography, spacing, imagery, and overall visual language — unless the user explicitly asks to change them. Layout structure may vary freely; it is the visual brand that must stay consistent. The user should not need to say "keep it on brand"; that is always the default.
 `.trim(),
   },
   { capabilities: { tools: {} } }

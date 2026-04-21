@@ -549,7 +549,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'add_variant',
-    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.\n\nIf the user wants the new variant to be based on or inspired by the existing page design: (1) Call get_page_variants first to identify the champion variant — do not assume it is "a", as the champion changes over time. (2) Call screenshot_variant on the champion to visually inspect the rendered design — this is essential for legacy builder pages where HTML/CSS alone does not convey the visual layout. (3) Call get_variant with the champion\'s letter to read its HTML and CSS — never guess at the existing content. Do not ask the user to provide any URLs or IDs; derive everything from get_page_variants.',
+    description: 'Add a new variant to an existing Unbounce page by duplicating variant A. Optionally provide html and/or css to immediately replace the duplicate\'s content. Returns the new variant letter. After adding a variant, always call rename_variant to give it a descriptive name reflecting its content (e.g. "Outcome Headline" or "Social Proof Hero") — not just the letter. You will need to republish the page after adding a variant.',
     inputSchema: {
       type: 'object',
       properties: {
