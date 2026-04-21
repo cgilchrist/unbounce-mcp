@@ -13,6 +13,7 @@ import * as path from 'path'
 import { chromium } from 'playwright'
 import { SESSION_DIR, SESSION_FILE, UNBOUNCE_APP_BASE } from './config.js'
 import {
+  clearJwtCache,
   directPublish, directUnpublish, directDelete,
   directSetVariantWeights, directSetTrafficMode, directSetPageUrl,
   directGetVariant, directEditVariant, directGetVariantNumericIds,
@@ -46,6 +47,7 @@ async function saveSession(session) {
 
 export function clearSession() {
   _session = null
+  clearJwtCache()
   return fs.promises.rm(SESSION_FILE, { force: true }).catch(() => {})
 }
 

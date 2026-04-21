@@ -317,14 +317,18 @@ function buildSaveXml(fullResponse) {
   ].join('')
 }
 
+let _jwtCache = null // { token: string, expiresAt: number }
+
 /**
  * Obtain a JWT token for authenticating editor API calls.
- * Uses Playwright's request context so cookies are inherited.
+ * Cached in memory for 50 minutes to avoid a page navigation on every call.
  */
 async function getJwt(page) {
+  if (_jwtCache && Date.now() < _jwtCache.expiresAt) {
+    return _jwtCache.token
+  }
   let csrf = await getCsrf(page)
   if (!csrf) {
-    // Page is at about:blank — navigate to base URL to get a CSRF token
     await page.goto(APP_BASE, { waitUntil: 'domcontentloaded', timeout: 15000 })
     csrf = await getCsrf(page)
   }
@@ -340,7 +344,12 @@ async function getJwt(page) {
   const data = await res.json()
   const token = data.token
   if (!token) throw new Error(`JWT response missing token (keys: ${JSON.stringify(Object.keys(data))})`)
+  _jwtCache = { token, expiresAt: Date.now() + 50 * 60 * 1000 }
   return token
+}
+
+export function clearJwtCache() {
+  _jwtCache = null
 }
 
 /**
