@@ -163,7 +163,6 @@ async function withPage(fn) {
   } catch (err) {
     const msg = err.message?.toLowerCase() ?? ''
     if (msg.includes('login') || msg.includes('401') || msg.includes('unauthorized') || msg.includes('unauthenticated')) {
-      await clearSession()
       throw new Error('Unbounce session expired. Call the reauthenticate tool to log in again, then retry.')
     }
     throw err
