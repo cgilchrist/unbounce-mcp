@@ -190,6 +190,85 @@ export async function directSetVariantWeights(page, pageId, weights) {
   if (errors?.length) throw new Error(String(errors))
 }
 
+// ── Variant lifecycle ─────────────────────────────────────────────────────────
+
+/**
+ * Resolve a variant letter to its Relay global ID via GraphQL.
+ */
+async function getVariantRelayId(page, pageUuid, variantLetter) {
+  const jwt = await getJwt(page)
+  const data = await gql(page, `
+    query PageVariantIdsQuery($pageUuid: String!) {
+      page(uuid: $pageUuid) {
+        pageVariants { nodes { id variantId } }
+      }
+    }
+  `, { pageUuid: pageUuid }, jwt)
+  const nodes = data?.page?.pageVariants?.nodes ?? []
+  const node = nodes.find(n => n.variantId?.toLowerCase() === variantLetter.toLowerCase())
+  if (!node) throw new Error(`Variant "${variantLetter}" not found on page ${pageUuid}`)
+  return node.id
+}
+
+const ACTIVATE_VARIANT_MUTATION = `
+mutation UpdateVariantToChallengerMutation($input: UpdateVariantToChallengerInput!) {
+  updateVariantToChallenger(input: $input) {
+    page { id }
+    errors
+  }
+}`
+
+const DEACTIVATE_VARIANT_MUTATION = `
+mutation DiscardVariantMutation($input: DiscardVariantInput!) {
+  discardVariant(input: $input) {
+    page { id }
+    errors
+  }
+}`
+
+const PROMOTE_VARIANT_MUTATION = `
+mutation PromoteVariantMutation($input: PromoteVariantInput!) {
+  promoteVariant(input: $input) {
+    page { id }
+    errors
+  }
+}`
+
+const DELETE_VARIANT_MUTATION = `
+mutation DeleteVariant($input: DeleteVariantInput!) {
+  deleteVariant(input: $input) {
+    errors
+  }
+}`
+
+export async function directActivateVariant(page, pageUuid, variantLetter) {
+  const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
+  const data = await gql(page, ACTIVATE_VARIANT_MUTATION, { input: { variantId } })
+  const errors = data?.updateVariantToChallenger?.errors
+  if (errors?.length) throw new Error(String(errors))
+}
+
+export async function directDeactivateVariant(page, pageUuid, variantLetter) {
+  const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
+  const data = await gql(page, DEACTIVATE_VARIANT_MUTATION, { input: { variantId } })
+  const errors = data?.discardVariant?.errors
+  if (errors?.length) throw new Error(String(errors))
+}
+
+export async function directPromoteVariant(page, pageUuid, variantLetter) {
+  const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
+  const data = await gql(page, PROMOTE_VARIANT_MUTATION, { input: { variantId } })
+  const errors = data?.promoteVariant?.errors
+  if (errors?.length) throw new Error(String(errors))
+}
+
+export async function directDeleteVariant(page, pageUuid, variantLetter) {
+  const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
+  const data = await gql(page, DELETE_VARIANT_MUTATION, { input: { variantId } })
+  const errors = data?.deleteVariant?.errors
+  if (errors?.length) throw new Error(String(errors))
+}
+
 // ── Variant get / edit ─────────────────────────────────────────────────────────
 
 /**

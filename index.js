@@ -37,6 +37,12 @@ When a user asks you to add or create a variant on an existing page, you MUST do
 2. Call screenshot_variant on the champion to visually understand the current design.
 3. Call get_variant on the champion to read its HTML and CSS.
 Then ensure the new variant preserves the existing brand identity — colors, typography, spacing, imagery, and overall visual language — unless the user explicitly asks to change them. Layout structure may vary freely; it is the visual brand that must stay consistent. The user should not need to say "keep it on brand"; that is always the default.
+
+When setting up an A/B test on a page that was in standard mode (single variant), follow this exact order:
+1. set_traffic_mode(ab_test) — switch to A/B test routing FIRST. Do this before activate_variant, because activate_variant behaves differently per mode: in standard mode it replaces the champion (wrong); in A/B test mode it adds the variant as a challenger (correct).
+2. activate_variant on the new challenger variant.
+3. set_variant_weights to set the traffic split.
+4. publish_page.
 `.trim(),
   },
   { capabilities: { tools: {} } }

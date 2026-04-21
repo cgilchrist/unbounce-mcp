@@ -20,6 +20,7 @@ import {
   directFetchDuplicationOptions, directDuplicatePage,
   directSearchPages, directGetPageInsights, directGetPageStats,
   directGetBulkPageStats, directGetPageVariants, directGetVariantPreviewUrl,
+  directActivateVariant, directDeactivateVariant, directPromoteVariant, directDeleteVariant,
 } from './direct.js'
 
 let _browser = null
@@ -248,8 +249,6 @@ export async function setPageUrl(subAccountId, pageId, domain, slug) {
  */
 export async function setTrafficMode(subAccountId, pageId, mode, variantId = null) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
     await directSetTrafficMode(page, pageId, mode, variantId)
   })
 }
@@ -268,10 +267,33 @@ export async function setVariantWeights(subAccountId, pageId, weights) {
   if (values.some(v => !Number.isInteger(v) || v < 0)) throw new Error('Variant weights must be non-negative integers')
 
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
-
     await directSetVariantWeights(page, pageId, weights)
+  })
+}
+
+// ── Variant lifecycle ─────────────────────────────────────────────────────────
+
+export async function activateVariant(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    await directActivateVariant(page, pageId, variantLetter)
+  })
+}
+
+export async function deactivateVariant(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    await directDeactivateVariant(page, pageId, variantLetter)
+  })
+}
+
+export async function promoteVariant(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    await directPromoteVariant(page, pageId, variantLetter)
+  })
+}
+
+export async function deleteVariant(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    await directDeleteVariant(page, pageId, variantLetter)
   })
 }
 

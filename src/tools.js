@@ -18,6 +18,7 @@ import {
   setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages,
   getPageInsights, getPageStats, findPagesByStats, editVariantHtml, getVariantContent, addVariant,
   renameVariant, getPageVariants, getVariantPreviewUrl, screenshotVariant,
+  activateVariant, deactivateVariant, promoteVariant, deleteVariant,
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
@@ -375,7 +376,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'delete_page',
-    description: 'Permanently delete an Unbounce page and all its variants. This cannot be undone.',
+    description: 'Permanently delete an Unbounce page and all its variants. This cannot be undone. Always ask the user for explicit confirmation before calling this tool.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -425,7 +426,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'set_variant_weights',
-    description: 'Set A/B test traffic split percentages for a multi-variant page. Weights must be integers summing to 100. Page will be republished if it was already live.',
+    description: 'Set A/B test traffic split percentages for a multi-variant page. Weights must be integers summing to 100. Automatically switches the page to A/B test routing mode if it is in standard or smart traffic mode. IMPORTANT: all variants included in the weights must be active (not discarded) — if a variant was just added to a standard-mode page, call activate_variant on it first or it will remain inactive and receive no traffic. Page will be republished if it was already live.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -573,6 +574,61 @@ export const TOOL_DEFINITIONS = [
         name: { type: 'string', description: 'New display name for the variant.' },
       },
       required: ['sub_account_id', 'page_id', 'variant', 'name'],
+    },
+  },
+  {
+    name: 'activate_variant',
+    description: 'Activate a discarded/inactive variant so it can receive traffic. In A/B test mode this is "Add to test"; in Smart Traffic mode it is "Add to active variants"; in Standard mode it is "Make this the active variant". Call this after add_variant when the page is in standard mode, since new variants are created in discarded state and will not receive traffic until activated.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter to activate: a, b, c, etc.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant'],
+    },
+  },
+  {
+    name: 'deactivate_variant',
+    description: 'Deactivate an active variant, moving it to discarded/inactive state. It will no longer receive traffic but its content is preserved. Requires user confirmation — ask before calling.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter to deactivate: a, b, c, etc.' },
+        confirm: { type: 'boolean', description: 'Must be true to proceed.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant', 'confirm'],
+    },
+  },
+  {
+    name: 'promote_variant',
+    description: 'Promote a challenger variant to champion. The current champion is discarded. This is the standard action when a challenger wins an A/B test. Requires explicit user confirmation — always ask before calling.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Challenger variant letter to promote: b, c, d, etc.' },
+        confirm: { type: 'boolean', description: 'Must be true to proceed. The current champion will be discarded.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant', 'confirm'],
+    },
+  },
+  {
+    name: 'delete_variant',
+    description: 'Permanently delete a variant. This cannot be undone. Requires explicit user confirmation — always ask before calling.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter to delete: a, b, c, etc.' },
+        confirm: { type: 'boolean', description: 'Must be true to proceed.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant', 'confirm'],
     },
   },
   {
@@ -887,6 +943,29 @@ export async function handleTool(name, args) {
 
     case 'rename_variant': {
       return renameVariant(args.sub_account_id, args.page_id, args.variant, args.name)
+    }
+
+    case 'activate_variant': {
+      await activateVariant(args.sub_account_id, args.page_id, args.variant)
+      return { success: true, variant: args.variant, state: 'active' }
+    }
+
+    case 'deactivate_variant': {
+      if (!args.confirm) throw new Error('You must set confirm: true to deactivate a variant.')
+      await deactivateVariant(args.sub_account_id, args.page_id, args.variant)
+      return { success: true, variant: args.variant, state: 'discarded' }
+    }
+
+    case 'promote_variant': {
+      if (!args.confirm) throw new Error('You must set confirm: true to promote a variant. The current champion will be discarded.')
+      await promoteVariant(args.sub_account_id, args.page_id, args.variant)
+      return { success: true, promoted: args.variant }
+    }
+
+    case 'delete_variant': {
+      if (!args.confirm) throw new Error('You must set confirm: true to delete a variant.')
+      await deleteVariant(args.sub_account_id, args.page_id, args.variant)
+      return { success: true, deleted: args.variant }
     }
 
     case 'get_page_variants': {
