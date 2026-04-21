@@ -1,0 +1,2274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Unbounce MCP — Prompt your way to live pages.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;500;600;700;800&family=Source+Sans+3:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   Unbounce Design System — Foundations
+   Colors + Type tokens. Import in any UI kit / slide / mock.
+   ========================================================= */
+
+
+:root {
+  /* ---------- BRAND CORE ---------- */
+  --ub-blue:       #214DFF;   /* Unbounce Blue */
+  --ub-blue-600:   #1A3ECC;   /* Hover / pressed blue */
+  --ub-blue-700:   #13309A;
+  --ub-blue-100:   #D3DCFF;   /* Tint surfaces */
+  --ub-blue-50:    #EDF1FF;
+
+  --ub-pink:       #FF3370;   /* Bold pink — primary co-color, CTA energy */
+  --ub-pink-600:   #E5185A;
+  --ub-pink-100:   #FFD6E2;
+
+  --ub-yellow:     #FFD23F;   /* Sunshine accent, highlights */
+  --ub-yellow-100: #FFF3C4;
+
+  --ub-green:      #1FC77E;   /* Conversion / success accent */
+  --ub-green-100:  #C8F1DE;
+
+  /* ---------- INK / NEUTRALS ---------- */
+  --ub-ink:        #303030;   /* Primary type — pulled from logo path fill */
+  --ub-ink-2:      #4A4A4A;   /* Secondary text */
+  --ub-ink-3:      #6B7280;   /* Tertiary / meta */
+  --ub-ink-4:      #9CA3AF;   /* Muted / placeholder */
+  --ub-line:       #E5E7EB;   /* Hairline divider */
+  --ub-line-2:     #F0F1F3;
+  --ub-bg:         #FFFFFF;
+  --ub-bg-soft:    #F7F8FA;   /* Section bg */
+  --ub-bg-cream:   #FFF9F0;   /* Warm marketing surface */
+  --ub-ink-inv:    #FFFFFF;
+
+  /* ---------- SEMANTIC ---------- */
+  --color-bg:           var(--ub-bg);
+  --color-bg-elevated:  var(--ub-bg);
+  --color-bg-subtle:    var(--ub-bg-soft);
+  --color-fg-1:         var(--ub-ink);
+  --color-fg-2:         var(--ub-ink-2);
+  --color-fg-3:         var(--ub-ink-3);
+  --color-fg-muted:     var(--ub-ink-4);
+  --color-border:       var(--ub-line);
+  --color-accent:       var(--ub-blue);
+  --color-cta:          var(--ub-pink);
+  --color-success:      var(--ub-green);
+  --color-warn:         var(--ub-yellow);
+
+  /* ---------- TYPE FAMILIES ----------
+     Display: Barlow Semi Condensed (headlines, strong + simple)
+     Body:    Source Sans 3 (modern OFL successor to Source Sans Pro)
+     Mono:    JetBrains Mono / system fallback                */
+  --font-display: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+  --font-body:    "Source Sans 3", "Source Sans Pro", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono:    ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
+
+  /* ---------- TYPE SCALE (display / hero) ---------- */
+  --type-hero:     clamp(48px, 6vw, 88px);   /* "Launch faster. Convert more." */
+  --type-h1:       clamp(40px, 4.5vw, 64px);
+  --type-h2:       clamp(30px, 3vw, 44px);
+  --type-h3:       24px;
+  --type-h4:       20px;
+  --type-eyebrow:  14px;     /* uppercase labels */
+  --type-body-lg:  20px;
+  --type-body:     17px;
+  --type-body-sm:  15px;
+  --type-meta:     13px;
+  --type-micro:    11px;
+
+  /* line-heights */
+  --lh-tight:    1.04;
+  --lh-snug:     1.18;
+  --lh-normal:   1.5;
+  --lh-loose:    1.65;
+
+  /* ---------- SPACING ---------- */
+  --sp-1:  4px;  --sp-2:  8px;  --sp-3: 12px;  --sp-4: 16px;
+  --sp-5: 20px;  --sp-6: 24px;  --sp-8: 32px;  --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px; --sp-20: 80px; --sp-24: 96px;
+
+  /* ---------- RADIUS ---------- */
+  --r-xs:  4px;
+  --r-sm:  6px;
+  --r-md:  10px;
+  --r-lg:  16px;
+  --r-xl:  24px;
+  --r-pill: 999px;
+
+  /* ---------- ELEVATION (subtle, marketing-soft) ---------- */
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .04);
+  --shadow-2: 0 4px 12px rgba(16, 24, 40, .08), 0 2px 4px rgba(16, 24, 40, .04);
+  --shadow-3: 0 12px 32px rgba(16, 24, 40, .12), 0 4px 8px rgba(16, 24, 40, .05);
+  --shadow-cta: none;
+
+  /* ---------- MOTION ---------- */
+  --ease-out: cubic-bezier(.2, .7, .2, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+  --dur-fast: 120ms;
+  --dur:      200ms;
+  --dur-slow: 320ms;
+}
+
+/* =========================================================
+   SEMANTIC ELEMENT STYLES
+   ========================================================= */
+
+html, body {
+  font-family: var(--font-body);
+  color: var(--color-fg-1);
+  background: var(--color-bg);
+  font-size: var(--type-body);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  color: var(--color-fg-1);
+  letter-spacing: -0.01em;
+  margin: 0;
+  text-wrap: balance;
+}
+h1 { font-size: var(--type-h1); font-weight: 700; line-height: var(--lh-tight); letter-spacing: -.02em; }
+h2 { font-size: var(--type-h2); font-weight: 700; line-height: var(--lh-snug); letter-spacing: -.015em; }
+h3 { font-size: var(--type-h3); font-weight: 600; line-height: var(--lh-snug); }
+h4 { font-size: var(--type-h4); font-weight: 600; line-height: var(--lh-snug); }
+
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--type-eyebrow);
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ub-blue);
+}
+
+p { margin: 0 0 var(--sp-4); color: var(--color-fg-2); text-wrap: pretty; }
+small, .meta { font-size: var(--type-meta); color: var(--color-fg-3); }
+code, pre { font-family: var(--font-mono); font-size: 14px; background: var(--ub-bg-soft); padding: 2px 6px; border-radius: var(--r-xs); }
+a { color: var(--ub-blue); text-decoration: none; }
+a:hover { color: var(--ub-blue-600); text-decoration: underline; }
+a.btn, a.btn:hover, a.nav__cta, a.nav__cta:hover,
+a.ub-btn, a.ub-btn:hover { text-decoration: none; }
+a.btn--primary, a.btn--primary:hover,
+a.btn--secondary, a.btn--secondary:hover,
+a.nav__cta, a.nav__cta:hover { color: #fff; }
+a.btn--ghost { color: var(--ub-ink); }
+a.btn--ghost:hover { color: #fff; }
+
+/* ---- Buttons ---- */
+.ub-btn {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1;
+  padding: 14px 22px;
+  border-radius: var(--r-md);
+  border: none;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out),
+              background var(--dur) var(--ease-out),
+              box-shadow var(--dur) var(--ease-out);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.ub-btn--primary { background: var(--ub-pink); color: #fff; box-shadow: var(--shadow-cta); }
+.ub-btn--primary:hover { background: var(--ub-pink-600); }
+.ub-btn--primary:active { transform: translateY(1px); }
+.ub-btn--secondary { background: var(--ub-blue); color: #fff; }
+.ub-btn--secondary:hover { background: var(--ub-blue-600); }
+.ub-btn--ghost { background: transparent; color: var(--ub-ink); border: 2px solid var(--ub-ink); }
+.ub-btn--ghost:hover { background: var(--ub-ink); color: #fff; }
+
+/* ==========================================================
+   Unbounce MCP Launch — page styles
+   Built on top of Unbounce design system tokens.
+   Tokens live in assets/unbounce-tokens.css
+   ========================================================== */
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  background: var(--ub-bg);
+  color: var(--ub-ink);
+}
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+
+/* ========== NAV ========== */
+.nav {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--ub-line);
+}
+.nav__inner {
+  max-width: 1180px; margin: 0 auto;
+  padding: 14px 24px;
+  display: flex; align-items: center; gap: 32px;
+}
+.nav__brand { display: flex; align-items: center; margin-right: 16px; }
+.nav__brand img { height: 24px; display: block; }
+.nav__kind {
+  margin-left: 10px; padding: 3px 8px;
+  background: var(--ub-blue);
+  color: #fff;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.08em;
+  border-radius: var(--r-pill);
+  text-transform: uppercase;
+  font-family: var(--font-body);
+}
+.nav__links { display: flex; gap: 24px; flex: 1; font-size: 15px; font-weight: 600; color: var(--ub-ink); }
+.nav__links a:hover { color: var(--ub-blue); }
+.nav__cta {
+  padding: 10px 20px; border-radius: var(--r-pill);
+  background: var(--ub-blue); color: #fff;
+  font-size: 14px; font-weight: 700;
+  box-shadow: none;
+  transition: background var(--dur) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.nav__cta:hover { background: var(--ub-blue-600); }
+.nav__cta:active { transform: translateY(1px); }
+@media (max-width: 860px) { .nav__links { display: none; } }
+
+/* ========== COMMON ========== */
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-body);
+  font-size: var(--type-eyebrow);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ub-blue);
+  text-transform: uppercase;
+}.eyebrow--plain { color: var(--ub-ink-3); }
+.eyebrow--center { display: flex; justify-content: center; margin-bottom: 24px; }
+.eyebrow__dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--ub-blue);
+  box-shadow: 0 0 0 4px var(--ub-blue-100);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 10px;
+  padding: 14px 26px;
+  border-radius: var(--r-pill);
+  font-weight: 700; font-size: 16px;
+  line-height: 1;
+  font-family: var(--font-body);
+  box-shadow: none;
+  transition: transform var(--dur-fast) var(--ease-out),
+              background var(--dur) var(--ease-out);
+}
+.btn--primary { background: var(--ub-blue); color: #fff; box-shadow: none; }
+.btn--primary:hover { background: var(--ub-blue-600); }
+.btn--primary:active { transform: translateY(1px); }
+.btn--secondary { background: var(--ub-blue); color: #fff; }
+.btn--secondary:hover { background: var(--ub-blue-600); }
+.btn--ghost { background: transparent; color: var(--ub-ink); border: 2px solid var(--ub-ink); border-radius: var(--r-pill); }
+.btn--ghost:hover { background: var(--ub-ink); color: #fff; }
+.btn--full { width: 100%; padding: 15px 22px; }
+
+/* ========== HERO ========== */
+.hero {
+  position: relative;
+  padding: 72px 24px 88px;
+  overflow: hidden;
+  background: #fff;
+}
+.hero__inner {
+  position: relative;
+  max-width: 1180px; margin: 0 auto;
+  display: grid; grid-template-columns: 1.05fr 1fr;
+  gap: 56px; align-items: center;
+}
+.hero__h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(48px, 6vw, 76px);
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  margin: 20px 0 20px;
+  color: var(--ub-ink);
+  text-wrap: balance;
+}
+.hero__accent { color: var(--ub-blue); }.hero__sub {
+  font-size: 19px;
+  line-height: 1.5;
+  color: var(--ub-ink-2);
+  max-width: 560px;
+  margin: 0 0 28px;
+  text-wrap: pretty;
+}
+.hero__features {
+  display: flex; flex-wrap: wrap;
+  gap: 10px 22px;
+  list-style: none; padding: 0;
+  margin: 0 0 32px;
+  font-size: 15px; font-weight: 600;
+  color: var(--ub-ink-2);
+}
+.hero__features li { display: flex; align-items: center; gap: 8px; }
+.hero__features svg { flex-shrink: 0; }
+.hero__ctas { display: flex; gap: 18px; align-items: center; margin-bottom: 14px; }
+.hero__ctas a.link {
+  font-size: 15px; font-weight: 700;
+  color: var(--ub-blue);
+}
+.hero__ctas a.link:hover { color: var(--ub-blue-600); }
+.hero__fine { font-size: 13px; color: var(--ub-ink-3); margin-top: 8px; }
+
+/* hero terminal art */
+.hero__art {
+  position: relative;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-3);
+  background: var(--ub-ink);
+}
+.hero__term {
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.hero__termhead {
+  background: rgba(255,255,255,.05);
+  padding: 11px 14px;
+  display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.hero__termhead span {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: rgba(255,255,255,.2);
+}
+.hero__termhead span:nth-child(1) { background: #FF5F57; }
+.hero__termhead span:nth-child(2) { background: var(--ub-yellow); }
+.hero__termhead span:nth-child(3) { background: var(--ub-green); }
+.hero__termhead em {
+  margin-left: auto; font-style: normal;
+  color: rgba(255,255,255,.5); font-size: 12px;
+}
+.hero__termbody { padding: 20px 22px 24px; }
+.hero__termprompt { color: var(--ub-blue); margin-right: 8px; }
+.hero__termtext em { font-style: normal; color: var(--ub-yellow); }
+.hero__termline { margin-top: 12px; display: flex; gap: 10px; align-items: baseline; }
+.hero__termtool { color: var(--ub-blue); }
+.hero__termdim { color: rgba(255,255,255,.55); }
+.hero__termok { color: var(--ub-green); font-weight: 700; }
+
+@media (max-width: 960px) {
+  .hero__inner { grid-template-columns: 1fr; gap: 40px; }
+}
+
+/* ========== SECTIONS ========== */
+.section { padding: 96px 24px; }
+.section--alt { background: var(--ub-bg-soft); }
+.section--cream { background: var(--ub-blue-50); }
+.section--tight { padding: 56px 24px; background: var(--ub-bg-soft); }
+.section--cta {
+  padding: 96px 24px;
+  background: var(--ub-ink);
+  color: #fff;
+}
+.section__inner { max-width: 1180px; margin: 0 auto; }
+.section__inner--narrow { max-width: 900px; }
+
+.sec-head { max-width: 720px; margin-bottom: 56px; }
+.sec-head__title {
+  font-family: var(--font-display);
+  font-size: clamp(34px, 4vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  margin: 14px 0 14px;
+  color: var(--ub-ink);
+  text-wrap: balance;
+}
+.sec-head__sub {
+  color: var(--ub-ink-2);
+  font-size: 18px;
+  line-height: 1.55;
+  max-width: 640px;
+  text-wrap: pretty;
+  margin: 0;
+}
+
+/* ========== DEMO ========== */
+.demo-root {
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-3);
+}
+.demo-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border-bottom: 1px solid var(--ub-line);
+  background: var(--ub-bg-soft);
+}
+.demo-tab {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 18px;
+  text-align: left;
+  border-right: 1px solid var(--ub-line);
+  color: var(--ub-ink-3);
+  transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out);
+  position: relative;
+  font-family: var(--font-body);
+}
+.demo-tab:last-child { border-right: none; }
+.demo-tab:hover { background: #fff; color: var(--ub-ink); }
+.demo-tab.is-active { background: #fff; color: var(--ub-ink); }
+.demo-tab.is-active::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 3px; background: var(--ub-blue);
+}
+.demo-tab__num {
+  font-family: var(--font-body); font-weight: 700;
+  font-size: 11px;
+  color: var(--ub-ink-4);
+  letter-spacing: 0.08em;
+}
+.demo-tab.is-active .demo-tab__num { color: var(--ub-blue); }
+.demo-tab__label { display: flex; flex-direction: column; min-width: 0; }
+.demo-tab__cat {
+  font-family: var(--font-body); font-size: 10px; font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ub-ink-4);
+  text-transform: uppercase;
+}
+.demo-tab.is-active .demo-tab__cat { color: var(--ub-blue); }
+.demo-tab__title {
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 2px;
+}
+@media (max-width: 1000px) {
+  .demo-tabs { grid-template-columns: repeat(3, 1fr); }
+  .demo-tab:nth-child(3) { border-right: none; }
+}
+
+.demo-progress {
+  height: 3px; background: var(--ub-line-2); position: relative;
+}
+.demo-progress__fill {
+  height: 100%; background: var(--ub-blue);
+  transition: width .25s ease;
+}
+
+.demo-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  min-height: 560px;
+}
+@media (max-width: 900px) {
+  .demo-grid { grid-template-columns: 1fr; }
+}
+
+/* chat side */
+.demo-chat {
+  border-right: 1px solid var(--ub-line);
+  display: flex; flex-direction: column;
+  background: #fff;
+}
+.demo-chat__header {
+  padding: 12px 16px;
+  display: flex; align-items: center; gap: 7px;
+  border-bottom: 1px solid var(--ub-line);
+  background: var(--ub-bg-soft);
+}
+.demo-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ub-ink-4); }
+.demo-dot--r { background: #FF5F57; }
+.demo-dot--y { background: var(--ub-yellow); }
+.demo-dot--g { background: var(--ub-green); }
+.demo-chat__title {
+  margin-left: 12px; font-family: var(--font-mono);
+  font-size: 12px; color: var(--ub-ink-3);
+}
+.demo-chat__body {
+  flex: 1;
+  padding: 24px;
+  display: flex; flex-direction: column; gap: 20px;
+  overflow-y: auto;
+  max-height: 500px;
+}
+.demo-msg { display: flex; flex-direction: column; gap: 8px; animation: fadeUp .3s ease both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.demo-msg__role {
+  font-family: var(--font-body); font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--ub-ink-4);
+}
+.demo-msg--user .demo-msg__bubble {
+  background: var(--ub-blue);
+  color: #fff;
+  padding: 14px 18px;
+  border-radius: 14px 14px 4px 14px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.demo-caret {
+  display: inline-block;
+  color: var(--ub-yellow);
+  animation: blink 1s steps(2) infinite;
+  margin-left: 2px;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.demo-msg__stream {
+  background: var(--ub-bg-soft);
+  border: 1px solid var(--ub-line);
+  border-radius: 14px 14px 14px 4px;
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 10px;
+  font-size: 14px;
+}
+
+.step { display: flex; gap: 10px; align-items: flex-start; animation: fadeUp .25s ease both; }
+.step--think .step__bar {
+  width: 3px;
+  background: var(--ub-blue);
+  border-radius: 2px;
+  align-self: stretch;
+}
+.step--think .step__text {
+  color: var(--ub-ink-2);
+  font-style: italic;
+  padding: 2px 0;
+}
+.step__icon {
+  width: 20px; height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.step__icon .check {
+  color: var(--ub-green);
+  font-size: 14px;
+  font-weight: 700;
+}
+.spinner {
+  width: 12px; height: 12px;
+  border: 2px solid var(--ub-line);
+  border-top-color: var(--ub-blue);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.step__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.step__name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ub-blue-700);
+  background: var(--ub-blue-50);
+  padding: 2px 7px;
+  border-radius: var(--r-xs);
+  align-self: flex-start;
+  font-weight: 500;
+}
+.step__args {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--ub-ink-3);
+  line-height: 1.45;
+}
+
+.demo-done {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  margin-top: 4px;
+  background: var(--ub-green-100);
+  border-radius: var(--r-md);
+  font-size: 14px;
+  color: var(--ub-ink);
+  font-weight: 700;
+  animation: fadeUp .3s ease both;
+}
+.demo-done__check {
+  color: var(--ub-green); font-weight: 700;
+}
+
+.demo-chat__foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--ub-line);
+  background: var(--ub-bg-soft);
+}
+.demo-input {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  color: var(--ub-ink-4);
+}
+.demo-input__placeholder { flex: 1; }
+.demo-input kbd {
+  font-family: var(--font-mono); font-size: 10px;
+  padding: 2px 5px;
+  background: var(--ub-bg-soft);
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-xs);
+  color: var(--ub-ink-3);
+}
+
+/* preview side */
+.demo-preview {
+  display: flex; flex-direction: column;
+  background: linear-gradient(180deg, var(--ub-bg-soft), #fff);
+}
+.demo-preview__header {
+  padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--ub-line);
+  background: var(--ub-bg-soft);
+}
+.demo-preview__url {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 12px;
+  color: var(--ub-ink-2);
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-pill);
+}
+.demo-preview__lock { color: var(--ub-green); font-size: 9px; }
+.demo-preview__path { color: var(--ub-ink-4); }
+.demo-preview__badge {
+  font-family: var(--font-body); font-weight: 700; font-size: 10px;
+  letter-spacing: 0.1em;
+  padding: 4px 10px;
+  background: var(--ub-blue);
+  color: #fff;
+  border-radius: var(--r-pill);
+}
+.demo-preview__body {
+  flex: 1;
+  padding: 24px;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+}
+
+/* AB preview */
+.ab-preview { display: flex; flex-direction: column; gap: 16px; height: 100%; }
+.ab-preview__row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1; }
+.ab-preview__pane {
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .4s var(--ease-out), transform .4s var(--ease-out);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.ab-preview__pane.is-in { opacity: 1; transform: none; }
+.ab-preview__tag {
+  font-family: var(--font-body); font-weight: 700; font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ub-ink-3);
+  text-transform: uppercase;
+}
+.ab-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-md);
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--ub-ink-3);
+  opacity: 0; transform: translateY(8px);
+  transition: opacity .4s var(--ease-out), transform .4s var(--ease-out);
+}
+.ab-bar.is-in { opacity: 1; transform: none; }
+.ab-bar__track {
+  flex: 1; height: 6px; border-radius: var(--r-xs);
+  background: var(--ub-line);
+  display: flex; overflow: hidden;
+}
+.ab-bar__a { flex: 1; background: var(--ub-blue); }
+.ab-bar__b { flex: 1; background: var(--ub-ink); }
+
+/* MiniPage */
+.mini {
+  flex: 1;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-md);
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 0;
+  overflow: hidden;
+}
+.mini__nav { display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--ub-line-2); }
+.mini__logo { width: 40px; height: 10px; background: var(--ub-ink); border-radius: 3px; }
+.mini__menu { width: 24px; height: 6px; background: var(--ub-ink-4); border-radius: 3px; margin-left: 4px; }
+.mini[style*="warm"] .mini__hero { background: var(--ub-bg-cream); }
+.mini[style*="cool"] .mini__hero { background: var(--ub-blue-50); }
+.mini__hero {
+  padding: 16px 12px 18px;
+  border-radius: var(--r-sm);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.mini__eyebrow {
+  font-family: var(--font-body); font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--ub-blue);
+  text-transform: uppercase;
+}
+.mini__h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ub-ink);
+}
+.mini__sub { font-size: 10px; color: var(--ub-ink-3); }
+.mini__cta {
+  align-self: flex-start;
+  padding: 6px 14px;
+  background: var(--ub-blue);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: var(--r-pill);
+}
+.mini__grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.mini__cell {
+  aspect-ratio: 1.3;
+  background: repeating-linear-gradient(45deg, var(--ub-bg-soft), var(--ub-bg-soft) 4px, var(--ub-line) 4px, var(--ub-line) 5px);
+  border-radius: var(--r-xs);
+}
+
+/* Smart traffic list */
+.stf { display: flex; flex-direction: column; gap: 8px; height: 100%; }
+.stf__title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.stf__sub { font-size: 13px; color: var(--ub-ink-3); margin-bottom: 8px; }
+.stf__list { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.stf__row {
+  display: grid; grid-template-columns: 1.2fr 1.3fr auto;
+  align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-md);
+  opacity: 0; transform: translateY(6px);
+  transition: opacity .4s var(--ease-out), transform .4s var(--ease-out);
+}
+.stf__row.is-in { opacity: 1; transform: none; }
+.stf__slug { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 13px; }
+.stf__on {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ub-green);
+  box-shadow: 0 0 0 4px var(--ub-green-100);
+  animation: pulse 2s infinite;
+}
+.stf__meta { display: flex; gap: 10px; font-family: var(--font-mono); font-size: 11px; color: var(--ub-ink-3); }
+.stf__lift {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ub-green);
+  letter-spacing: -0.015em;
+}
+.stf__foot {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px dashed var(--ub-line);
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.stf__total {
+  font-family: var(--font-body); font-weight: 700; font-size: 11px;
+  color: var(--ub-ink-3); letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.stf__totalnum {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 800;
+  color: var(--ub-blue);
+  letter-spacing: -0.02em;
+}
+
+/* DTR preview */
+.dtr { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+.dtr__browser-url {
+  font-family: var(--font-mono); font-size: 11px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-sm);
+  color: var(--ub-ink-3);
+}
+.dtr__qs { color: var(--ub-blue); font-weight: 500; }
+.dtr__page {
+  flex: 1;
+  padding: 24px 20px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-md);
+  display: flex; flex-direction: column; gap: 12px;
+}
+.dtr__h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  color: var(--ub-ink);
+}
+.dtr__city {
+  display: inline-block;
+  color: var(--ub-blue);
+  background: var(--ub-blue-100);
+  padding: 0 8px;
+  border-radius: var(--r-xs);
+  transition: opacity .3s ease, transform .3s ease;
+}
+.dtr__city.is-in { animation: cityIn .5s var(--ease-out); }
+@keyframes cityIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.dtr__sub { font-size: 14px; color: var(--ub-ink-3); }
+.dtr__cta {
+  align-self: flex-start;
+  padding: 11px 22px;
+  background: var(--ub-ink); color: #fff;
+  font-size: 14px; font-weight: 700;
+  border-radius: var(--r-pill);
+  transition: all .3s var(--ease-out);
+}
+.dtr__cta.is-in {
+  background: var(--ub-blue);
+  box-shadow: none;
+  animation: ctaPulse .5s var(--ease-out);
+}
+@keyframes ctaPulse { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.dtr__form { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: auto; }
+.dtr__field { height: 32px; background: var(--ub-bg-soft); border-radius: var(--r-xs); border: 1px solid var(--ub-line-2); }
+.dtr__chips { display: flex; gap: 8px; }
+.dtr__chip {
+  font-family: var(--font-mono); font-size: 10px;
+  padding: 4px 10px;
+  background: var(--ub-bg-soft);
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-pill);
+  color: var(--ub-ink-3);
+  opacity: 0.35;
+  transition: all .3s var(--ease-out);
+}
+.dtr__chip.is-in {
+  opacity: 1; background: var(--ub-blue-100); border-color: var(--ub-blue);
+  color: var(--ub-blue-700);
+  font-weight: 500;
+}
+
+/* ABC preview */
+.abc { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; height: 100%; }
+.abc__pane {
+  display: flex; flex-direction: column; gap: 6px;
+  opacity: 0; transform: translateY(10px);
+  transition: opacity .4s var(--ease-out), transform .4s var(--ease-out);
+}
+.abc__pane.is-in { opacity: 1; transform: none; }
+.abc__tag {
+  font-family: var(--font-body); font-weight: 700;
+  font-size: 9px; letter-spacing: 0.1em;
+  color: var(--ub-ink-3);
+  text-transform: uppercase;
+}
+.abc__mini {
+  flex: 1;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.abc__h1 {
+  font-family: var(--font-display);
+  font-size: 14px; font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+  color: var(--ub-ink);
+}
+.abc__sub { font-size: 10px; color: var(--ub-ink-3); }
+.abc__cta {
+  align-self: flex-start;
+  padding: 4px 12px;
+  background: var(--ub-blue);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: var(--r-pill);
+}
+.abc__img {
+  flex: 1;
+  margin-top: auto;
+  background: repeating-linear-gradient(45deg, var(--ub-bg-soft), var(--ub-bg-soft) 4px, var(--ub-line) 4px, var(--ub-line) 5px);
+  border-radius: var(--r-xs);
+  min-height: 60px;
+}
+
+/* Report view */
+.rep { display: flex; flex-direction: column; gap: 14px; height: 100%; }
+.rep__head { display: flex; justify-content: space-between; align-items: flex-start; }
+.rep__title { font-family: var(--font-display); font-size: 20px; font-weight: 700; letter-spacing: -0.015em; }
+.rep__sub { font-family: var(--font-mono); font-size: 11px; color: var(--ub-ink-3); margin-top: 4px; }
+.rep__stat { text-align: right; }
+.rep__statnum { font-family: var(--font-display); font-size: 32px; font-weight: 800; color: var(--ub-green); letter-spacing: -0.02em; line-height: 1; }
+.rep__statlbl { font-family: var(--font-body); font-weight: 700; font-size: 10px; color: var(--ub-ink-3); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 4px; }
+.rep__chart {
+  display: flex; align-items: flex-end; gap: 6px;
+  height: 80px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-sm);
+}
+.rep__bar {
+  flex: 1;
+  background: linear-gradient(180deg, var(--ub-blue), var(--ub-blue-600));
+  border-radius: 3px 3px 0 0;
+  animation: growBar .6s var(--ease-out) both;
+  transform-origin: bottom;
+}
+@keyframes growBar { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.rep__table {
+  display: flex; flex-direction: column; gap: 1px;
+  background: var(--ub-line); border-radius: var(--r-sm); overflow: hidden;
+  border: 1px solid var(--ub-line);
+}
+.rep__thead, .rep__trow {
+  display: grid; grid-template-columns: 1.5fr 1fr 0.7fr 1.2fr;
+  gap: 12px;
+  padding: 8px 12px;
+  background: #fff;
+  font-size: 13px;
+}
+.rep__thead {
+  font-family: var(--font-body); font-weight: 700; font-size: 10px;
+  color: var(--ub-ink-3);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: var(--ub-bg-soft);
+}
+.rep__trow { animation: fadeUp .4s var(--ease-out) both; }
+.rep__slug { font-family: var(--font-mono); }
+.rep__pos { color: var(--ub-green); font-weight: 700; }
+.rep__neg { color: var(--ub-pink-600); font-weight: 700; }
+.rep__reco {
+  margin-top: auto;
+  padding: 12px 16px;
+  background: var(--ub-blue-50);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ub-ink);
+}
+.rep__recolbl {
+  display: inline-block;
+  font-family: var(--font-body); font-weight: 800;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--ub-blue);
+  margin-right: 8px;
+  text-transform: uppercase;
+}
+
+/* ========== HOW IT WORKS ========== */
+.how {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+@media (max-width: 900px) { .how { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .how { grid-template-columns: 1fr; } }
+.how__card {
+  padding: 32px 28px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-lg);
+  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+}
+.how__card:hover { transform: translateY(-2px); box-shadow: var(--shadow-3); }
+.how__n {
+  font-family: var(--font-display);
+  font-size: 40px; font-weight: 800;
+  color: var(--ub-blue);
+  letter-spacing: -0.03em;
+  line-height: 1;
+  margin-bottom: 20px;
+}
+.how__title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-bottom: 10px;
+  line-height: 1.15;
+  color: var(--ub-ink);
+}
+.how__body {
+  font-size: 15px;
+  color: var(--ub-ink-2);
+  line-height: 1.55;
+}
+
+/* ========== FEATURES ========== */
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+@media (max-width: 900px) { .features { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .features { grid-template-columns: 1fr; } }
+.features__card {
+  padding: 32px 28px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-lg);
+  transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+}
+.features__card:hover { transform: translateY(-2px); box-shadow: var(--shadow-3); }
+.features__tag {
+  display: inline-block;
+  font-family: var(--font-body); font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--ub-blue);
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.features__title {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-bottom: 10px;
+  color: var(--ub-ink);
+}
+.features__body {
+  font-size: 15px;
+  color: var(--ub-ink-2);
+  line-height: 1.55;
+}
+
+/* ========== CLIENTS ========== */
+.clients {
+  display: flex; flex-wrap: wrap;
+  justify-content: center;
+  gap: 32px 56px;
+}
+.clients__item {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--ub-ink-3);
+  transition: color var(--dur) var(--ease-out);
+}
+.clients__item:hover { color: var(--ub-blue); }
+
+/* ========== INSTALL ========== */
+.install {
+  display: grid; grid-template-columns: 1fr 1.4fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 900px) { .install { grid-template-columns: 1fr; } }
+.install__step {
+  padding: 28px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-lg);
+}
+.install__n {
+  font-family: var(--font-display);
+  font-size: 32px; font-weight: 800;
+  color: var(--ub-blue);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin-bottom: 18px;
+}
+.install__title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  margin-bottom: 10px;
+}
+.install__body { font-size: 15px; color: var(--ub-ink-2); line-height: 1.55; }
+.install__code {
+  margin: 0;
+  padding: 16px;
+  background: var(--ub-ink);
+  color: rgba(255,255,255,.9);
+  border-radius: var(--r-md);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-x: auto;
+}
+.install__code code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+/* ========== FAQ ========== */
+.faq { display: flex; flex-direction: column; border-top: 1px solid var(--ub-line); }
+.faq__item { border-bottom: 1px solid var(--ub-line); }
+.faq__q {
+  width: 100%;
+  padding: 24px 0;
+  display: flex; justify-content: space-between; align-items: center;
+  text-align: left;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ub-ink);
+}
+.faq__toggle {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--ub-blue);
+  margin-left: 16px;
+}
+.faq__a {
+  max-height: 0;
+  overflow: hidden;
+  color: var(--ub-ink-2);
+  font-size: 16px;
+  line-height: 1.6;
+  transition: max-height .3s ease, padding .3s ease;
+}
+.faq__item.is-open .faq__a {
+  max-height: 300px;
+  padding-bottom: 24px;
+}
+
+/* ========== LEAD GEN ========== */
+.section--cta .eyebrow--plain { color: var(--ub-yellow); }
+.leadgen {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 64px;
+  align-items: start;
+}
+@media (max-width: 860px) { .leadgen { grid-template-columns: 1fr; gap: 40px; } }
+.leadgen__title {
+  font-family: var(--font-display);
+  font-size: clamp(32px, 3.6vw, 48px);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.06;
+  margin: 16px 0 16px;
+  color: #fff;
+  text-wrap: balance;
+}
+.leadgen__sub {
+  color: rgba(255,255,255,.75);
+  font-size: 17px; line-height: 1.55;
+  margin-bottom: 28px;
+}
+.leadgen__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.leadgen__list li {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 15px;
+  color: rgba(255,255,255,.92);
+}
+.leadgen__check {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--ub-blue); color: #fff;
+  font-size: 12px; font-weight: 800;
+  flex-shrink: 0;
+}
+
+.leadgen__form {
+  background: #fff;
+  padding: 32px;
+  border-radius: var(--r-lg);
+  display: flex; flex-direction: column; gap: 18px;
+  box-shadow: var(--shadow-3);
+}
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > span {
+  font-family: var(--font-body); font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--ub-ink-2);
+  text-transform: uppercase;
+}
+.field input, .field select {
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-md);
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--ub-ink);
+  transition: border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+}
+.field input:focus, .field select:focus {
+  outline: none;
+  border-color: var(--ub-blue);
+  box-shadow: 0 0 0 3px rgba(0,153,255,.2);
+}
+.field input::placeholder { color: var(--ub-ink-4); }
+.field__fine {
+  font-size: 12px; color: var(--ub-ink-3); text-align: center;
+  margin-top: -4px;
+}
+
+.leadgen__done {
+  background: #fff;
+  padding: 48px 32px;
+  border-radius: var(--r-lg);
+  text-align: center;
+  box-shadow: var(--shadow-3);
+}
+.leadgen__donecheck {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--ub-green);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 800;
+  margin: 0 auto 20px;
+}
+.leadgen__donetitle {
+  font-family: var(--font-display);
+  font-size: 26px; font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 10px;
+  color: var(--ub-ink);
+}
+.leadgen__donesub { color: var(--ub-ink-2); font-size: 15px; line-height: 1.5; }
+
+/* ========== FOOTER ========== */
+.footer {
+  background: var(--ub-ink);
+  color: #fff;
+  padding: 72px 24px 32px;
+}
+.footer__inner {
+  max-width: 1180px; margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.2fr repeat(3, 1fr);
+  gap: 40px;
+}
+@media (max-width: 860px) { .footer__inner { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 500px) { .footer__inner { grid-template-columns: 1fr; } }
+.footer__brand img { height: 28px; filter: invert(1) brightness(2); display: block; margin-bottom: 14px; }
+.footer__brand p { color: rgba(255,255,255,.65); font-size: 14px; line-height: 1.55; max-width: 240px; margin: 0; }
+.footer__h {
+  font-family: var(--font-body); font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--ub-yellow);
+  margin-bottom: 14px;
+  text-transform: uppercase;
+}
+.footer__col a {
+  display: block;
+  padding: 5px 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255,255,255,.85);
+}
+.footer__col a:hover { color: #fff; }
+.footer__fine {
+  grid-column: 1 / -1;
+  padding-top: 24px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,.12);
+  font-size: 13px;
+  color: rgba(255,255,255,.6);
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+}
+
+/* ========== TWEAKS PANEL ========== */
+.tweaks {
+  position: fixed; bottom: 24px; right: 24px;
+  width: 280px;
+  background: #fff;
+  border: 1px solid var(--ub-line);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-3);
+  z-index: 100;
+  display: none;
+  font-size: 13px;
+}
+.tweaks.is-on { display: block; }
+.tweaks__title {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 12px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.tweaks__title em {
+  font-style: normal;
+  font-family: var(--font-body); font-weight: 700;
+  font-size: 10px;
+  color: var(--ub-ink-3);
+  letter-spacing: 0.1em;
+}
+.tweaks__row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid var(--ub-line-2);
+  gap: 12px;
+}
+.tweaks__label { font-size: 13px; color: var(--ub-ink-2); font-weight: 600; }
+.tweaks__seg {
+  display: flex; background: var(--ub-bg-soft);
+  border-radius: var(--r-sm); padding: 2px;
+}
+.tweaks__seg button {
+  padding: 5px 10px; border-radius: var(--r-xs);
+  font-size: 12px; font-weight: 600;
+  color: var(--ub-ink-3);
+  font-family: var(--font-body);
+}
+.tweaks__seg button.is-on { background: #fff; color: var(--ub-blue); box-shadow: var(--shadow-1); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script>
+window.__resources = {
+  unbounceLogo: 'data:image/png;base64,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'
+};
+</script>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel">
+// Interactive prompt demo — cycles through 5 marketer scenarios
+// Each scenario has: the prompt, a scripted "agent run" sequence (tool calls),
+// and a final rendered result panel on the right.
+
+const SCENARIOS = [
+  {
+    id: 'launch-ab',
+    title: 'Launch + A/B test',
+    category: 'NEW PAGE',
+    prompt: `Make me a page for our Spring Hardware Sale launching Friday. Let's A/B test a version with the headline "30% off everything" against one that says "Your workshop, upgraded." Publish both to unbouncepages.com/spring-sale.`,
+    steps: [
+      { kind: 'think', text: 'Designing two variants with distinct headline strategies…' },
+      { kind: 'tool', name: 'write_html', args: 'variant-a.html · "30% off everything"', duration: 900 },
+      { kind: 'tool', name: 'write_html', args: 'variant-b.html · "Your workshop, upgraded."', duration: 900 },
+      { kind: 'tool', name: 'deploy_page', args: 'account: Acme Retail · slug: /spring-sale', duration: 1200 },
+      { kind: 'tool', name: 'set_traffic_mode', args: 'A/B · 50/50 split', duration: 700 },
+      { kind: 'tool', name: 'publish_page', args: 'unbouncepages.com/spring-sale', duration: 900 },
+      { kind: 'done', text: 'Published. 2 variants live.' },
+    ],
+    result: { kind: 'ab-preview' },
+  },
+  {
+    id: 'smart-traffic',
+    title: 'Turn on Smart Traffic',
+    category: 'OPTIMIZE',
+    prompt: `Find all my pages with traffic and multiple variants. Turn on Smart Traffic so we get that ~20% conversion boost.`,
+    steps: [
+      { kind: 'tool', name: 'list_pages', args: 'filter: published, variants > 1', duration: 900 },
+      { kind: 'think', text: 'Found 4 pages with live traffic and ≥2 variants.' },
+      { kind: 'tool', name: 'set_traffic_mode', args: '/q3-webinar → Smart Traffic', duration: 600 },
+      { kind: 'tool', name: 'set_traffic_mode', args: '/free-audit → Smart Traffic', duration: 600 },
+      { kind: 'tool', name: 'set_traffic_mode', args: '/demo-request → Smart Traffic', duration: 600 },
+      { kind: 'tool', name: 'set_traffic_mode', args: '/pricing-v2 → Smart Traffic', duration: 600 },
+      { kind: 'done', text: '4 pages switched. Routing live.' },
+    ],
+    result: { kind: 'smart-traffic-list' },
+  },
+  {
+    id: 'dtr-edit',
+    title: 'Edit with DTR',
+    category: 'EDIT LIVE PAGE',
+    prompt: `On the /demo-request page, swap the hero CTA copy to "Book a 15-min walkthrough" and add Dynamic Text Replacement so the headline reads the visitor's city when it's in the URL.`,
+    steps: [
+      { kind: 'tool', name: 'get_variant', args: '/demo-request · variant A', duration: 700 },
+      { kind: 'think', text: 'Locating the hero CTA and headline blocks…' },
+      { kind: 'tool', name: 'edit_variant', args: 'CTA → "Book a 15-min walkthrough"', duration: 900 },
+      { kind: 'tool', name: 'edit_variant', args: 'Headline → {{city|your city}} DTR', duration: 1000 },
+      { kind: 'tool', name: 'publish_page', args: '/demo-request', duration: 700 },
+      { kind: 'done', text: 'Changes live. DTR active on ?city=.' },
+    ],
+    result: { kind: 'dtr-preview' },
+  },
+  {
+    id: 'smart-traffic-2',
+    title: 'Clone + localize',
+    category: 'SCALE',
+    prompt: `Take my best-performing demo page and clone it into 3 industry-specific versions: SaaS, Healthcare, and E-commerce. Run them as an A/B/C test at equal weights.`,
+    steps: [
+      { kind: 'tool', name: 'get_variant', args: '/demo-request · top performer', duration: 700 },
+      { kind: 'think', text: 'Rewriting copy for each vertical…' },
+      { kind: 'tool', name: 'write_html', args: 'saas.html — SaaS ICP, integrations angle', duration: 900 },
+      { kind: 'tool', name: 'write_html', args: 'health.html — HIPAA, compliance proof', duration: 900 },
+      { kind: 'tool', name: 'write_html', args: 'ecom.html — GMV lift, 7-day trial', duration: 900 },
+      { kind: 'tool', name: 'deploy_page', args: '/demo-industry · 3 variants', duration: 1100 },
+      { kind: 'tool', name: 'set_variant_weights', args: '34 / 33 / 33', duration: 600 },
+      { kind: 'done', text: '3 localized variants published.' },
+    ],
+    result: { kind: 'abc-preview' },
+  },
+  {
+    id: 'friday-push',
+    title: 'Weekly performance report',
+    category: 'ANALYZE',
+    prompt: `What happened across my landing pages this week? Which variants are winning, and where should I double down?`,
+    steps: [
+      { kind: 'tool', name: 'list_pages', args: 'window: last 7 days', duration: 800 },
+      { kind: 'tool', name: 'fetch_metrics', args: '12 pages · conversion, CVR, visits', duration: 1100 },
+      { kind: 'think', text: 'Analyzing variant deltas and statistical significance…' },
+      { kind: 'done', text: 'Report ready.' },
+    ],
+    result: { kind: 'report' },
+  },
+];
+
+function PromptDemo() {
+  const [activeIdx, setActiveIdx] = React.useState(0);
+  const [runState, setRunState] = React.useState('idle'); // idle | typing | running | done
+  const [typedChars, setTypedChars] = React.useState(0);
+  const [stepIdx, setStepIdx] = React.useState(-1);
+  const [autoplay, setAutoplay] = React.useState(true);
+
+  const scenario = SCENARIOS[activeIdx];
+  const fullPrompt = scenario.prompt;
+
+  // Reset + start sequence when scenario changes
+  React.useEffect(() => {
+    setRunState('typing');
+    setTypedChars(0);
+    setStepIdx(-1);
+  }, [activeIdx]);
+
+  // Typing effect
+  React.useEffect(() => {
+    if (runState !== 'typing') return;
+    if (typedChars >= fullPrompt.length) {
+      const t = setTimeout(() => {
+        setRunState('running');
+        setStepIdx(0);
+      }, 400);
+      return () => clearTimeout(t);
+    }
+    const speed = 14 + Math.random() * 10;
+    const t = setTimeout(() => setTypedChars((c) => Math.min(c + 2, fullPrompt.length)), speed);
+    return () => clearTimeout(t);
+  }, [runState, typedChars, fullPrompt]);
+
+  // Step runner
+  React.useEffect(() => {
+    if (runState !== 'running') return;
+    if (stepIdx >= scenario.steps.length) {
+      setRunState('done');
+      return;
+    }
+    const step = scenario.steps[stepIdx];
+    const dur = step.duration || 700;
+    const t = setTimeout(() => setStepIdx((i) => i + 1), dur);
+    return () => clearTimeout(t);
+  }, [runState, stepIdx, scenario]);
+
+  // Autoplay — advance to next scenario 3.5s after done
+  React.useEffect(() => {
+    if (runState !== 'done' || !autoplay) return;
+    const t = setTimeout(() => {
+      setActiveIdx((i) => (i + 1) % SCENARIOS.length);
+    }, 3500);
+    return () => clearTimeout(t);
+  }, [runState, autoplay]);
+
+  const visibleSteps = scenario.steps.slice(0, Math.max(0, stepIdx + (runState === 'done' ? 0 : 1)));
+  const progress = runState === 'done' ? 1 : runState === 'running' ? (stepIdx + 1) / (scenario.steps.length + 1) : typedChars / fullPrompt.length * 0.3;
+
+  return (
+    <div className="demo-root">
+      {/* Scenario selector tabs */}
+      <div className="demo-tabs" role="tablist">
+        {SCENARIOS.map((s, i) => (
+          <button
+            key={s.id}
+            role="tab"
+            aria-selected={i === activeIdx}
+            className={`demo-tab ${i === activeIdx ? 'is-active' : ''}`}
+            onClick={() => { setAutoplay(false); setActiveIdx(i); }}
+          >
+            <span className="demo-tab__num">{String(i + 1).padStart(2, '0')}</span>
+            <span className="demo-tab__label">
+              <span className="demo-tab__cat">{s.category}</span>
+              <span className="demo-tab__title">{s.title}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* Progress bar for active scenario */}
+      <div className="demo-progress" aria-hidden="true">
+        <div className="demo-progress__fill" style={{ width: `${progress * 100}%` }} />
+      </div>
+
+      <div className="demo-grid">
+        {/* LEFT: chat / agent panel */}
+        <div className="demo-chat">
+          <div className="demo-chat__header">
+            <span className="demo-dot demo-dot--r" />
+            <span className="demo-dot demo-dot--y" />
+            <span className="demo-dot demo-dot--g" />
+            <span className="demo-chat__title">claude · with unbounce-mcp</span>
+          </div>
+
+          <div className="demo-chat__body">
+            {/* User prompt */}
+            <div className="demo-msg demo-msg--user">
+              <div className="demo-msg__role">YOU</div>
+              <div className="demo-msg__bubble">
+                {fullPrompt.slice(0, typedChars)}
+                {runState === 'typing' && <span className="demo-caret">▋</span>}
+              </div>
+            </div>
+
+            {/* Agent response */}
+            {runState !== 'typing' && (
+              <div className="demo-msg demo-msg--agent">
+                <div className="demo-msg__role">CLAUDE</div>
+                <div className="demo-msg__stream">
+                  {visibleSteps.map((step, i) => (
+                    <StepRow key={i} step={step} isLast={i === visibleSteps.length - 1 && runState !== 'done'} />
+                  ))}
+                  {runState === 'done' && (
+                    <div className="demo-done">
+                      <span className="demo-done__check">✓</span>
+                      <span>{scenario.steps.find(s => s.kind === 'done')?.text || 'Done.'}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="demo-chat__foot">
+            <div className="demo-input">
+              <span className="demo-input__placeholder">Ask your agent to publish, edit, or optimize…</span>
+              <kbd>⌘</kbd><kbd>↵</kbd>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: result preview */}
+        <div className="demo-preview">
+          <div className="demo-preview__header">
+            <div className="demo-preview__url">
+              <span className="demo-preview__lock">●</span>
+              <span>your.domain.com</span>
+              <span className="demo-preview__path">/landing-page</span>
+            </div>
+            <span className="demo-preview__badge">LIVE</span>
+          </div>
+          <div className="demo-preview__body">
+            <ResultView scenario={scenario} runState={runState} stepIdx={stepIdx} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StepRow({ step, isLast }) {
+  if (step.kind === 'think') {
+    return (
+      <div className="step step--think">
+        <span className="step__bar" />
+        <span className="step__text">{step.text}</span>
+      </div>
+    );
+  }
+  if (step.kind === 'tool') {
+    return (
+      <div className={`step step--tool ${isLast ? 'is-running' : ''}`}>
+        <span className="step__icon">
+          {isLast ? <span className="spinner" /> : <span className="check">✓</span>}
+        </span>
+        <div className="step__main">
+          <code className="step__name">{step.name}</code>
+          <span className="step__args">{step.args}</span>
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+// ============ RESULT VIEWS ============
+
+function ResultView({ scenario, runState, stepIdx }) {
+  const revealed = runState === 'done' || runState === 'running';
+  const revealIdx = runState === 'done' ? 99 : stepIdx;
+  const kind = scenario.result.kind;
+
+  if (kind === 'ab-preview') return <ABPreview revealed={revealed} revealIdx={revealIdx} />;
+  if (kind === 'smart-traffic-list') return <SmartTrafficList revealIdx={revealIdx} done={runState === 'done'} />;
+  if (kind === 'dtr-preview') return <DTRPreview revealIdx={revealIdx} done={runState === 'done'} />;
+  if (kind === 'abc-preview') return <ABCPreview revealIdx={revealIdx} done={runState === 'done'} />;
+  if (kind === 'report') return <ReportView done={runState === 'done'} />;
+  return null;
+}
+
+function MiniPage({ headline, sub, cta, tint, label }) {
+  return (
+    <div className="mini" style={{ '--tint': tint }}>
+      <div className="mini__nav">
+        <span className="mini__logo" />
+        <span className="mini__menu" /><span className="mini__menu" /><span className="mini__menu" />
+      </div>
+      <div className="mini__hero">
+        <div className="mini__eyebrow">{label}</div>
+        <div className="mini__h1">{headline}</div>
+        <div className="mini__sub">{sub}</div>
+        <div className="mini__cta">{cta}</div>
+      </div>
+      <div className="mini__grid">
+        <div className="mini__cell" /><div className="mini__cell" /><div className="mini__cell" />
+      </div>
+    </div>
+  );
+}
+
+function ABPreview({ revealed, revealIdx }) {
+  const showA = revealIdx >= 1;
+  const showB = revealIdx >= 2;
+  const showSplit = revealIdx >= 4;
+  return (
+    <div className="ab-preview">
+      <div className="ab-preview__row">
+        <div className={`ab-preview__pane ${showA ? 'is-in' : ''}`}>
+          <div className="ab-preview__tag">VARIANT A · 50%</div>
+          <MiniPage
+            headline="30% off everything"
+            sub="Spring hardware sale — now through Sunday."
+            cta="Shop the sale"
+            tint="warm"
+            label="SPRING '26"
+          />
+        </div>
+        <div className={`ab-preview__pane ${showB ? 'is-in' : ''}`}>
+          <div className="ab-preview__tag">VARIANT B · 50%</div>
+          <MiniPage
+            headline="Your workshop, upgraded."
+            sub="Pro-grade tools, now priced for spring."
+            cta="Start building"
+            tint="cool"
+            label="NEW COLLECTION"
+          />
+        </div>
+      </div>
+      <div className={`ab-bar ${showSplit ? 'is-in' : ''}`}>
+        <span>A/B split live</span>
+        <div className="ab-bar__track"><div className="ab-bar__a" /><div className="ab-bar__b" /></div>
+        <span>unbouncepages.com/spring-sale</span>
+      </div>
+    </div>
+  );
+}
+
+function SmartTrafficList({ revealIdx, done }) {
+  const pages = [
+    { slug: '/q3-webinar', visits: '12.4k', lift: '+18%', variants: 3 },
+    { slug: '/free-audit', visits: '8.1k', lift: '+22%', variants: 2 },
+    { slug: '/demo-request', visits: '21.7k', lift: '+19%', variants: 4 },
+    { slug: '/pricing-v2', visits: '5.9k', lift: '+24%', variants: 2 },
+  ];
+  return (
+    <div className="stf">
+      <div className="stf__title">Smart Traffic — enabled on 4 pages</div>
+      <div className="stf__sub">Est. lift based on current variant performance</div>
+      <div className="stf__list">
+        {pages.map((p, i) => (
+          <div key={p.slug} className={`stf__row ${revealIdx >= i + 2 || done ? 'is-in' : ''}`}>
+            <div className="stf__slug">
+              <span className="stf__on" /> {p.slug}
+            </div>
+            <div className="stf__meta">
+              <span>{p.variants} variants</span>
+              <span>{p.visits} visits / wk</span>
+            </div>
+            <div className="stf__lift">{p.lift}</div>
+          </div>
+        ))}
+      </div>
+      <div className="stf__foot">
+        <span className="stf__total">Est. combined lift</span>
+        <span className="stf__totalnum">+20.7%</span>
+      </div>
+    </div>
+  );
+}
+
+function DTRPreview({ revealIdx, done }) {
+  const showNewCta = revealIdx >= 3 || done;
+  const showDtr = revealIdx >= 4 || done;
+  const cities = ['Toronto', 'Austin', 'Berlin', 'Lisbon'];
+  const [cityIdx, setCityIdx] = React.useState(0);
+  React.useEffect(() => {
+    if (!showDtr) return;
+    const t = setInterval(() => setCityIdx((i) => (i + 1) % cities.length), 1400);
+    return () => clearInterval(t);
+  }, [showDtr]);
+
+  return (
+    <div className="dtr">
+      <div className="dtr__browser-url">
+        unbouncepages.com/demo-request
+        {showDtr && <span className="dtr__qs">?city={cities[cityIdx].toLowerCase()}</span>}
+      </div>
+      <div className="dtr__page">
+        <div className="dtr__h1">
+          Your team in {' '}
+          <span className={`dtr__city ${showDtr ? 'is-in' : ''}`} key={cities[cityIdx]}>
+            {showDtr ? cities[cityIdx] : 'your city'}
+          </span>
+          {' '}deserves better landing pages.
+        </div>
+        <div className="dtr__sub">Book a walkthrough and see the platform in action.</div>
+        <div className={`dtr__cta ${showNewCta ? 'is-in' : ''}`}>
+          {showNewCta ? 'Book a 15-min walkthrough' : 'Request a demo'}
+        </div>
+        <div className="dtr__form">
+          <div className="dtr__field" />
+          <div className="dtr__field" />
+        </div>
+      </div>
+      <div className="dtr__chips">
+        <span className={`dtr__chip ${showNewCta ? 'is-in' : ''}`}>CTA updated</span>
+        <span className={`dtr__chip ${showDtr ? 'is-in' : ''}`}>DTR: {'{{city}}'}</span>
+      </div>
+    </div>
+  );
+}
+
+function ABCPreview({ revealIdx, done }) {
+  const shown = [revealIdx >= 2 || done, revealIdx >= 3 || done, revealIdx >= 4 || done];
+  const pages = [
+    { label: 'SAAS', headline: 'Ship faster. Convert more.', sub: '300+ integrations out of the box.', tint: '#ff6a3d' },
+    { label: 'HEALTHCARE', headline: 'HIPAA-ready by default.', sub: 'Built for regulated workflows.', tint: '#2aa876' },
+    { label: 'E-COMMERCE', headline: 'Lift GMV from day one.', sub: '7-day trial, no card required.', tint: '#6e56cf' },
+  ];
+  return (
+    <div className="abc">
+      {pages.map((p, i) => (
+        <div key={p.label} className={`abc__pane ${shown[i] ? 'is-in' : ''}`} style={{ '--accent': p.tint }}>
+          <div className="abc__tag">{p.label} · 33%</div>
+          <div className="abc__mini">
+            <div className="abc__h1">{p.headline}</div>
+            <div className="abc__sub">{p.sub}</div>
+            <div className="abc__cta">Start free</div>
+            <div className="abc__img" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReportView({ done }) {
+  const rows = [
+    { slug: '/demo-request', cvr: '8.4%', delta: '+1.2', winner: 'B' },
+    { slug: '/spring-sale', cvr: '11.2%', delta: '+3.1', winner: 'A' },
+    { slug: '/q3-webinar', cvr: '6.9%', delta: '−0.4', winner: null },
+    { slug: '/free-audit', cvr: '14.7%', delta: '+4.8', winner: 'C' },
+  ];
+  return (
+    <div className="rep">
+      <div className="rep__head">
+        <div>
+          <div className="rep__title">Last 7 days</div>
+          <div className="rep__sub">12 pages · 48 variants · 127,402 visits</div>
+        </div>
+        <div className="rep__stat">
+          <div className="rep__statnum">+14.2%</div>
+          <div className="rep__statlbl">blended CVR vs. prev. wk</div>
+        </div>
+      </div>
+      <div className="rep__chart">
+        {[40, 55, 48, 72, 68, 81, 76].map((h, i) => (
+          <div key={i} className="rep__bar" style={{ height: `${h}%`, animationDelay: `${i * 80}ms` }} />
+        ))}
+      </div>
+      <div className="rep__table">
+        <div className="rep__thead">
+          <span>page</span><span>cvr</span><span>Δ</span><span>winner</span>
+        </div>
+        {rows.map((r, i) => (
+          <div key={r.slug} className="rep__trow" style={{ animationDelay: `${i * 100}ms` }}>
+            <span className="rep__slug">{r.slug}</span>
+            <span>{r.cvr}</span>
+            <span className={r.delta.startsWith('−') ? 'rep__neg' : 'rep__pos'}>{r.delta}</span>
+            <span>{r.winner ? <b>Variant {r.winner}</b> : <em>inconclusive</em>}</span>
+          </div>
+        ))}
+      </div>
+      <div className="rep__reco">
+        <span className="rep__recolbl">RECOMMEND</span>
+        Double down on /free-audit variant C. Retire /q3-webinar variant A.
+      </div>
+    </div>
+  );
+}
+
+window.PromptDemo = PromptDemo;
+</script>
+
+<script type="text/babel">
+// Hero, features, how-it-works, clients, install, FAQ, lead gen, footer
+// Rewritten on Unbounce design system — Barlow Semi Condensed display,
+// Source Sans 3 body, Unbounce Blue + Bold Pink, "marketer-to-marketer" voice.
+
+function Nav() {
+  return (
+    <nav className="nav">
+      <div className="nav__inner">
+        <a className="nav__brand" href="#top" aria-label="Unbounce MCP">
+          <img src={window.__resources?.unbounceLogo || "assets/unbounce-logo.png"} alt="Unbounce" />
+          <span className="nav__kind">MCP</span>
+        </a>
+        <div className="nav__links">
+          <a href="#demo">See it in action</a>
+          <a href="#how">How it works</a>
+          <a href="#features">Features</a>
+          <a href="#install">Install</a>
+          <a href="#faq">FAQ</a>
+        </div>
+        <a href="#get-access" className="nav__cta">Get early access</a>
+      </div>
+    </nav>
+  );
+}
+
+function Check() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#FF3370" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function Hero() {
+  const features = ['Claude, ChatGPT, Gemini ready', 'One-prompt publish', 'Smart Traffic + A/B built in', 'Edit pages in plain English'];
+  return (
+    <section className="hero" id="top">
+      <div className="hero__inner">
+        <div>
+          <div className="eyebrow">
+            <span className="eyebrow__dot" />
+            <span>NEW · OPEN BETA</span>
+          </div>
+          <h1 className="hero__h1">
+            Prompt your way<br />
+            to <span className="hero__accent">live pages.</span>
+          </h1>
+          <p className="hero__sub">
+            Design landing pages in the AI client you love — Claude, ChatGPT, Gemini,
+            whatever. One command ships them to Unbounce, so you still get Smart Traffic,
+            A/B testing, DTR, and the speed-tuned hosting you're paying for.
+          </p>
+          <ul className="hero__features">
+            {features.map((f) => (
+              <li key={f}><Check />{f}</li>
+            ))}
+          </ul>
+          <div className="hero__ctas">
+            <a href="#get-access" className="btn btn--primary">Get early access</a>
+            <a href="#demo" className="link">See it in action →</a>
+          </div>
+          <p className="hero__fine">Free for active Unbounce customers. No new billing.</p>
+        </div>
+
+        <div className="hero__art" aria-hidden="true">
+          <div className="hero__term">
+            <div className="hero__termhead">
+              <span /><span /><span />
+              <em>~/campaign · claude</em>
+            </div>
+            <div className="hero__termbody">
+              <div>
+                <span className="hero__termprompt">›</span>
+                <span className="hero__termtext">
+                  Publish <em>hero.html</em> to <em>/spring-sale</em> with Smart Traffic
+                </span>
+              </div>
+              <div className="hero__termline">
+                <span className="hero__termtool">→ deploy_page</span>
+                <span className="hero__termdim">packaging variants…</span>
+              </div>
+              <div className="hero__termline">
+                <span className="hero__termtool">→ set_traffic_mode</span>
+                <span className="hero__termdim">smart_traffic</span>
+              </div>
+              <div className="hero__termline">
+                <span className="hero__termok">✓</span>
+                <span>your.domain.com/spring-sale · live</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SectionHead({ kicker, title, sub, center }) {
+  return (
+    <div className="sec-head" style={center ? { margin: '0 auto 56px', textAlign: 'center' } : undefined}>
+      <div className={`eyebrow ${center ? 'eyebrow--center' : ''}`}>{kicker}</div>
+      <h2 className="sec-head__title">{title}</h2>
+      {sub && <p className="sec-head__sub" style={center ? { margin: '0 auto' } : undefined}>{sub}</p>}
+    </div>
+  );
+}
+
+function DemoSection() {
+  return (
+    <section className="section section--alt" id="demo">
+      <div className="section__inner">
+        <SectionHead
+          kicker="SEE IT IN ACTION"
+          title="Talk to your agent. Ship a landing page."
+          sub="Real prompts marketers send, real tool calls the MCP makes, real results on Unbounce. Flip through five scenarios below — each plays out live."
+        />
+        <PromptDemo />
+      </div>
+    </section>
+  );
+}
+
+function HowItWorks() {
+  const steps = [
+    {
+      n: '01',
+      title: 'Design in your AI client.',
+      body: "Ask Claude, ChatGPT, or Gemini for a landing page. You get HTML — the same stuff you'd write by hand, just faster.",
+    },
+    {
+      n: '02',
+      title: 'The MCP packages it.',
+      body: "Single page or multi-variant test, it's wrapped into Unbounce's native format. You never see the plumbing.",
+    },
+    {
+      n: '03',
+      title: 'One prompt to publish.',
+      body: 'Name the domain and slug. The server uploads, configures traffic mode, and publishes. The live URL comes back in chat.',
+    },
+    {
+      n: '04',
+      title: 'Iterate in plain English.',
+      body: '"Change the CTA copy." "Add a testimonials section." Read, edit, republish — no round-trip through the builder.',
+    },
+  ];
+  return (
+    <section className="section" id="how">
+      <div className="section__inner">
+        <SectionHead
+          kicker="HOW IT WORKS"
+          title="Four steps. One conversation."
+        />
+        <div className="how">
+          {steps.map((s) => (
+            <div key={s.n} className="how__card">
+              <div className="how__n">{s.n}</div>
+              <div className="how__title">{s.title}</div>
+              <div className="how__body">{s.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Features() {
+  const features = [
+    {
+      tag: 'ROUTING',
+      title: 'Smart Traffic',
+      body: 'Machine learning routes visitors to the variant most likely to convert. Teams see an average ~20% lift without writing a line of targeting logic.',
+    },
+    {
+      tag: 'EXPERIMENTS',
+      title: 'A/B & multivariate',
+      body: 'Ship any number of variants with custom weights. The MCP wires the split; Unbounce handles the distribution, stats, and winner calls.',
+    },
+    {
+      tag: 'PERSONALIZATION',
+      title: 'Dynamic Text Replacement',
+      body: 'Swap any text on the page based on URL parameters. Match the ad, match the audience — without forking a variant for every keyword.',
+    },
+    {
+      tag: 'INFRASTRUCTURE',
+      title: 'Speed-tuned hosting',
+      body: "Edge-delivered, image-optimized, CDN-backed. Your AI-drafted HTML gets the same performance envelope as every other Unbounce page.",
+    },
+    {
+      tag: 'EDITING',
+      title: 'Prompt-based edits',
+      body: '"Change the heading on variant B." The client reads the variant\'s HTML and CSS, makes a targeted edit, and republishes. No builder round-trip.',
+    },
+    {
+      tag: 'COMPATIBILITY',
+      title: 'Any MCP client',
+      body: 'Works with Claude, ChatGPT, Gemini, Cursor, and any tool that speaks MCP. Bring your own model, your own workflow.',
+    },
+  ];
+  return (
+    <section className="section section--alt" id="features">
+      <div className="section__inner">
+        <SectionHead
+          kicker="EVERYTHING YOU ALREADY USE"
+          title="The full Unbounce stack. Reached by prompt."
+          sub="You write HTML in whatever AI tool you like. Unbounce supplies the conversion infrastructure underneath — the same one your published pages run on today."
+        />
+        <div className="features">
+          {features.map((f) => (
+            <div key={f.title} className="features__card">
+              <div className="features__tag">{f.tag}</div>
+              <div className="features__title">{f.title}</div>
+              <div className="features__body">{f.body}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Clients() {
+  const items = ['Claude', 'ChatGPT', 'Gemini', 'Cursor', 'Windsurf', 'Cline', 'Zed', 'Continue'];
+  return (
+    <section className="section section--tight">
+      <div className="section__inner">
+        <div className="eyebrow eyebrow--center">WORKS WITH YOUR AI CLIENT OF CHOICE</div>
+        <div className="clients">
+          {items.map((c) => <div key={c} className="clients__item">{c}</div>)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Install() {
+  return (
+    <section className="section" id="install">
+      <div className="section__inner">
+        <SectionHead
+          kicker="INSTALL"
+          title="Three lines of config. That's it."
+        />
+        <div className="install">
+          <div className="install__step">
+            <div className="install__n">01</div>
+            <div className="install__title">Grab your Unbounce API key.</div>
+            <div className="install__body">Account Overview → API Access → Create New Key. Takes ten seconds.</div>
+          </div>
+          <div className="install__step">
+            <div className="install__n">02</div>
+            <div className="install__title">Paste into your MCP config.</div>
+            <pre className="install__code"><code>{`{
+  "mcpServers": {
+    "unbounce": {
+      "command": "npx",
+      "args": ["-y", "github:unbounce/unbounce-mcp"],
+      "env": {
+        "UNBOUNCE_API_KEY": "ub_live_…"
+      }
+    }
+  }
+}`}</code></pre>
+          </div>
+          <div className="install__step">
+            <div className="install__n">03</div>
+            <div className="install__title">Prompt your way to production.</div>
+            <div className="install__body">Restart your client. Ask your agent to publish something. Done — you're live.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FAQ() {
+  const items = [
+    { q: 'Is this a replacement for the Unbounce builder?', a: "Nope — it's an alternate publishing path. Love the visual builder? Keep using it. Rather prompt your way to a page? Point your AI client at the MCP server. Pages ship to the same infrastructure either way." },
+    { q: 'What about Smart Traffic and A/B tests I already run?', a: 'Untouched. The MCP works on top of your existing account. Pages published from an AI client appear alongside pages built in the editor, and either side can edit either type.' },
+    { q: 'Which AI client should I use?', a: "Any that speaks MCP. Claude Desktop, Claude Code, Cursor, Windsurf, Cline, and Continue all work today. ChatGPT and Gemini are next, as their MCP support lands." },
+    { q: 'Do you train on my pages or prompts?', a: "No. The server runs locally, talks to Unbounce's API, and never sends your prompts or HTML anywhere except your own account." },
+    { q: 'How does pricing work?', a: "Free for every active Unbounce customer. Your existing plan already covers hosting, Smart Traffic, and DTR. No new SKU, no per-prompt fees." },
+    { q: 'Can I edit MCP-published pages in the visual builder?', a: 'Yep. Pages are stored as standard Unbounce pages — open them in the builder, make changes, save. Your AI client reads the updated HTML back on the next prompt.' },
+  ];
+  const [open, setOpen] = React.useState(0);
+  return (
+    <section className="section section--cream" id="faq">
+      <div className="section__inner section__inner--narrow">
+        <SectionHead kicker="FAQ" title="Common questions." />
+        <div className="faq">
+          {items.map((it, i) => (
+            <div key={i} className={`faq__item ${open === i ? 'is-open' : ''}`}>
+              <button className="faq__q" onClick={() => setOpen(open === i ? -1 : i)}>
+                <span>{it.q}</span>
+                <span className="faq__toggle">{open === i ? '−' : '+'}</span>
+              </button>
+              <div className="faq__a">{it.a}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function LeadGen() {
+  const [state, setState] = React.useState({ email: '', name: '', company: '', client: 'Claude' });
+  const [submitted, setSubmitted] = React.useState(false);
+  const update = (k) => (e) => setState((s) => ({ ...s, [k]: e.target.value }));
+  const submit = (e) => {
+    e.preventDefault();
+    if (!state.email) return;
+    setSubmitted(true);
+  };
+  return (
+    <section className="section--cta section" id="get-access">
+      <div className="section__inner section__inner--narrow">
+        <div className="leadgen">
+          <div className="leadgen__left">
+            <div className="eyebrow eyebrow--plain">EARLY ACCESS</div>
+            <h2 className="leadgen__title">Ship your first AI-drafted page this week.</h2>
+            <p className="leadgen__sub">
+              The MCP is rolling out to Unbounce customers in waves. Drop your email — we'll
+              send your install link plus a starter prompt pack the same day.
+            </p>
+            <ul className="leadgen__list">
+              <li><span className="leadgen__check">✓</span> Free on every active Unbounce plan</li>
+              <li><span className="leadgen__check">✓</span> 10-minute setup · zero new billing</li>
+              <li><span className="leadgen__check">✓</span> Starter prompt pack + office hours invite</li>
+            </ul>
+          </div>
+          <div className="leadgen__right">
+            {!submitted ? (
+              <form className="leadgen__form" onSubmit={submit}>
+                <label className="field">
+                  <span>Work email</span>
+                  <input type="email" required value={state.email} onChange={update('email')} placeholder="you@company.com" />
+                </label>
+                <label className="field">
+                  <span>Full name</span>
+                  <input type="text" value={state.name} onChange={update('name')} placeholder="Jane Rivera" />
+                </label>
+                <label className="field">
+                  <span>Company</span>
+                  <input type="text" value={state.company} onChange={update('company')} placeholder="Acme Co." />
+                </label>
+                <label className="field">
+                  <span>Preferred AI client</span>
+                  <select value={state.client} onChange={update('client')}>
+                    <option>Claude</option>
+                    <option>ChatGPT</option>
+                    <option>Gemini</option>
+                    <option>Cursor</option>
+                    <option>Other</option>
+                  </select>
+                </label>
+                <button type="submit" className="btn btn--primary btn--full">Request early access</button>
+                <div className="field__fine">We'll email your invite within 48 hours. No spam.</div>
+              </form>
+            ) : (
+              <div className="leadgen__done">
+                <div className="leadgen__donecheck">✓</div>
+                <div className="leadgen__donetitle">You're on the list.</div>
+                <div className="leadgen__donesub">
+                  We'll email <b>{state.email}</b> with your install link and a starter prompt pack.
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Footer() {
+  const cols = [
+    { h: 'Product', items: ['Landing pages', 'Smart Traffic', 'A/B testing', 'Dynamic Text Replacement', 'MCP server'] },
+    { h: 'Resources', items: ['Docs', 'Prompt library', 'Changelog', 'Integrations'] },
+    { h: 'Company', items: ['About', 'Careers', 'Contact', 'Security'] },
+  ];
+  return (
+    <footer className="footer">
+      <div className="footer__inner">
+        <div className="footer__brand">
+          <img src={window.__resources?.unbounceLogo || "assets/unbounce-logo.png"} alt="Unbounce" />
+          <p>The leading landing page platform built for marketers. Launch faster. Convert more.</p>
+        </div>
+        {cols.map(({ h, items }) => (
+          <div key={h} className="footer__col">
+            <div className="footer__h">{h}</div>
+            {items.map((it) => <a key={it} href="#">{it}</a>)}
+          </div>
+        ))}
+        <div className="footer__fine">
+          <span>© 2009–2026 Unbounce Inc. All rights reserved.</span>
+          <span>Built on the Model Context Protocol.</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function App() {
+  return (
+    <>
+      <Nav />
+      <Hero />
+      <DemoSection />
+      <HowItWorks />
+      <Features />
+      <Clients />
+      <Install />
+      <LeadGen />
+      <FAQ />
+      <Footer />
+    </>
+  );
+}
+
+window.App = App;
+</script>
+
+<script type="text/babel">
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+</body>
+</html>

@@ -196,14 +196,13 @@ export async function directSetVariantWeights(page, pageId, weights) {
  * Resolve a variant letter to its Relay global ID via GraphQL.
  */
 async function getVariantRelayId(page, pageUuid, variantLetter) {
-  const jwt = await getJwt(page)
   const data = await gql(page, `
     query PageVariantIdsQuery($pageUuid: String!) {
       page(uuid: $pageUuid) {
         pageVariants { nodes { id variantId } }
       }
     }
-  `, { pageUuid: pageUuid }, jwt)
+  `, { pageUuid: pageUuid })
   const nodes = data?.page?.pageVariants?.nodes ?? []
   const node = nodes.find(n => n.variantId?.toLowerCase() === variantLetter.toLowerCase())
   if (!node) throw new Error(`Variant "${variantLetter}" not found on page ${pageUuid}`)
@@ -996,8 +995,7 @@ function mapVariant(v, role) {
 }
 
 export async function directGetPageVariants(page, pageUuid) {
-  const jwt = await getJwt(page)
-  const data = await gql(page, PAGE_VARIANTS_DETAILED_QUERY, { uuid: pageUuid }, jwt)
+  const data = await gql(page, PAGE_VARIANTS_DETAILED_QUERY, { uuid: pageUuid })
   const p = data?.page
   if (!p) throw new Error(`No page data returned for UUID ${pageUuid}`)
   const champion = p.championVariant ? mapVariant(p.championVariant, 'champion') : null

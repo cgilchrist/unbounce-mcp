@@ -358,9 +358,6 @@ export async function unpublishPage(subAccountId, pageId) {
 
 export async function deletePage(subAccountId, pageId) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
-
     try {
       await directDelete(page, pageId)
       return
@@ -369,6 +366,8 @@ export async function deletePage(subAccountId, pageId) {
     }
 
     // UI fallback
+    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
+    await page.waitForLoadState('load')
     await page.click('[data-testid="flyout-page-actions"]')
     await page.waitForSelector('[data-testid="flyoutDeletePage"]')
     await page.click('[data-testid="flyoutDeletePage"]')
@@ -382,9 +381,6 @@ export async function deletePage(subAccountId, pageId) {
 
 export async function findPagesByStats(subAccountId, pages, filters) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages`)
-    await page.waitForLoadState('load')
-
     const stats = await directGetBulkPageStats(page, pages.map(p => p.id))
 
     const statsById = {}
@@ -410,8 +406,6 @@ export async function findPagesByStats(subAccountId, pages, filters) {
 
 export async function getPageStats(subAccountId, pageId, { startDate, endDate } = {}) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
     return directGetPageStats(page, pageId, { startDate, endDate })
   })
 }
@@ -420,8 +414,6 @@ export async function getPageStats(subAccountId, pageId, { startDate, endDate } 
 
 export async function getPageInsights(subAccountId, pageId) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
     return directGetPageInsights(page, pageId)
   })
 }
@@ -438,16 +430,12 @@ export async function findPages(query) {
 
 export async function getPageVariants(subAccountId, pageId) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
     return directGetPageVariants(page, pageId)
   })
 }
 
 export async function getVariantPreviewUrl(subAccountId, pageId, variantLetter) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
     const { variants } = await directGetPageVariants(page, pageId)
     const variant = variants.find(v => v.variant === variantLetter.toLowerCase())
     if (!variant) throw new Error(`Variant "${variantLetter}" not found on page ${pageId}`)
@@ -458,9 +446,6 @@ export async function getVariantPreviewUrl(subAccountId, pageId, variantLetter) 
 
 export async function screenshotVariant(subAccountId, pageId, variantLetter) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
-
     const { variants } = await directGetPageVariants(page, pageId)
     const variant = variants.find(v => v.variant === variantLetter.toLowerCase())
     if (!variant) throw new Error(`Variant "${variantLetter}" not found on page ${pageId}`)
@@ -472,15 +457,22 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
     if (!iframeSrc) throw new Error('Preview iframe not found — page may not have loaded')
 
     // Navigate directly to the iframe URL for a clean screenshot (no Unbounce toolbar)
-    await page.setViewportSize({ width: 1280, height: 900 })
     await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
 
-    const buffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+    await page.setViewportSize({ width: 1280, height: 900 })
+    const desktopBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.waitForTimeout(500)
+    const mobileBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+
+    const label = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
     return {
-      _type: 'image',
-      data: buffer.toString('base64'),
-      mimeType: 'image/jpeg',
-      caption: `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim(),
+      _type: 'images',
+      images: [
+        { data: desktopBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (desktop 1280px)` },
+        { data: mobileBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (mobile 390px)` },
+      ],
     }
   })
 }
@@ -489,9 +481,6 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
 
 export async function duplicatePage(subAccountId, pageId, { includeInactiveVariants = false, integrationIds = 'all' } = {}) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
-
     const { integrations, active, inactive } = await directFetchDuplicationOptions(page, pageId)
 
     const variantIds = includeInactiveVariants

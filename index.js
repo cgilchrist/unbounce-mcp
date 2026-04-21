@@ -44,7 +44,7 @@ LOGO: If the original variant has a logo, the new variant MUST use the exact sam
 
 IMAGERY: If the original variant has real photos or images (headshots, product shots, backgrounds, etc.), reuse those same images in the new variant unless the explicit purpose of the test is to try different imagery. Never replace real photos with placeholder avatars, initials, icons, or generated alternatives.
 
-FONTS: If the original variant uses custom fonts (loaded via @font-face, Google Fonts, Typekit, or any font CDN link), the new variant MUST use those exact same fonts for the same text roles — headings, body, CTAs, labels. Copy the font @import or <link> tags verbatim from the original. Do not substitute system fonts or different typefaces.
+FONTS: Identify the brand fonts using two signals in the original variant's HTML: (1) any script tag containing window.ub.page.webFonts — e.g. window.ub.page.webFonts = ['Jost:700,regular,600,300italic'] — this is Unbounce's mechanism for loading Google Fonts, and the font names listed there are the brand fonts; (2) font-family declarations throughout inline styles, <style> blocks, or linked stylesheets. Whatever font-family names appear — e.g. "Jost", "Montserrat", "Playfair Display" — you MUST use those same fonts in the new variant for the same text roles (headings, body, CTAs, labels). If the original has visible @import or <link> tags for those fonts, copy them verbatim. If the font is declared via window.ub.page.webFonts or has no visible load tag, add a standard Google Fonts <link> tag for the same font and weights yourself. Do not substitute system fonts or invent different typefaces.
 
 When setting up an A/B test on a page that was in standard mode (single variant), follow this exact order:
 1. set_traffic_mode(ab_test) — switch to A/B test routing FIRST. Do this before activate_variant, because activate_variant behaves differently per mode: in standard mode it replaces the champion (wrong); in A/B test mode it adds the variant as a challenger (correct).
@@ -70,6 +70,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           { type: 'image', data: result.data, mimeType: result.mimeType },
           { type: 'text', text: result.caption ?? '' },
         ],
+      }
+    }
+    if (result?._type === 'images') {
+      return {
+        content: result.images.flatMap(img => [
+          { type: 'image', data: img.data, mimeType: img.mimeType },
+          { type: 'text', text: img.caption ?? '' },
+        ]),
       }
     }
     return {
