@@ -117,7 +117,8 @@ mutation DeletePages($input: DeletePagesInput!) {
 }`
 
 export async function directDelete(page, pageId) {
-  const data = await gql(page, DELETE_MUTATION, { input: { pageUuids: [pageId] } })
+  const jwt = await getJwt(page)
+  const data = await gql(page, DELETE_MUTATION, { input: { pageUuids: [pageId] } }, jwt)
   const errors = data?.deletePages?.errors
   if (errors?.length) throw new Error(errors.map(e => e.message).join('; '))
 }
@@ -142,11 +143,11 @@ export async function directSetTrafficMode(page, pageId, mode, variantId = null)
   const strategy = STRATEGY_MAP[mode]
   if (!strategy) throw new Error(`Unknown traffic mode: ${mode}`)
 
+  const jwt = await getJwt(page)
   let config = null
   if (mode === 'standard') {
     let champion = variantId
     if (!champion) {
-      const jwt = await getJwt(page)
       const data = await gql(page, `
         query PageVariantsStateQuery($pageUuid: String!) {
           page(uuid: $pageUuid) {
@@ -165,17 +166,13 @@ export async function directSetTrafficMode(page, pageId, mode, variantId = null)
     config = { single: { variantId: champion } }
   }
 
-  const data = await gql(page, SET_ROUTING_MUTATION, {
-    input: { pageId, strategy, config },
-  })
+  const data = await gql(page, SET_ROUTING_MUTATION, { input: { pageId, strategy, config } }, jwt)
   const errors = data?.setRoutingStrategy?.errors
   if (errors?.length) throw new Error(String(errors))
 }
 
 export async function directSetVariantWeights(page, pageId, weights) {
-  // Use SetRoutingStrategy so this works from any starting mode (standard,
-  // smart_traffic, or already weighted) — avoids UI timeout when the page is
-  // in Standard mode and variants are inactive/discarded.
+  const jwt = await getJwt(page)
   const entries = Object.entries(weights)
   const championId = entries.reduce((best, [id, w]) => w > (weights[best] ?? 0) ? id : best, entries[0][0])
   const weightArray = entries.map(([id, weight]) => ({ id, weight }))
@@ -185,7 +182,7 @@ export async function directSetVariantWeights(page, pageId, weights) {
       strategy: 'weighted',
       config: { weighted: { championId, weights: weightArray } },
     },
-  })
+  }, jwt)
   const errors = data?.setRoutingStrategy?.errors
   if (errors?.length) throw new Error(String(errors))
 }
@@ -882,7 +879,8 @@ query PagesQuery($uuid: String!, $first: Int!, $after: Int, $wherePage: PageFilt
 }`
 
 export async function directSearchPages(page, query, { limit = 20, offset = 0 } = {}) {
-  const viewerData = await gql(page, VIEWER_QUERY, {})
+  const jwt = await getJwt(page)
+  const viewerData = await gql(page, VIEWER_QUERY, {}, jwt)
   const companyUuid = viewerData?.viewer?.account?.uuid
   if (!companyUuid) throw new Error('Could not resolve company UUID from viewer query')
 
@@ -891,7 +889,7 @@ export async function directSearchPages(page, query, { limit = 20, offset = 0 } 
     first: limit,
     after: offset,
     wherePage: { nameContains: query },
-  })
+  }, jwt)
 
   const nodes = data?.company?.pages?.nodes ?? []
   const totalCount = data?.company?.pages?.totalCount ?? 0
@@ -934,9 +932,10 @@ mutation DuplicatePage($input: DuplicatePageInput!) {
 }`
 
 export async function directFetchDuplicationOptions(page, pageUuid) {
+  const jwt = await getJwt(page)
   const [intData, varData] = await Promise.all([
-    gql(page, PAGE_INTEGRATIONS_QUERY, { uuid: pageUuid }),
-    gql(page, PAGE_VARIANTS_QUERY, { uuid: pageUuid }),
+    gql(page, PAGE_INTEGRATIONS_QUERY, { uuid: pageUuid }, jwt),
+    gql(page, PAGE_VARIANTS_QUERY, { uuid: pageUuid }, jwt),
   ])
   const integrations = intData?.page?.integrations?.nodes ?? []
   const p = varData?.page ?? {}
@@ -946,9 +945,10 @@ export async function directFetchDuplicationOptions(page, pageUuid) {
 }
 
 export async function directDuplicatePage(page, pageUuid, variantIds, integrationDuplicationIds) {
+  const jwt = await getJwt(page)
   const data = await gql(page, DUPLICATE_PAGE_MUTATION, {
     input: { pageUuid, variantIds, integrationDuplicationIds },
-  })
+  }, jwt)
   const errors = data?.duplicatePage?.errors
   if (errors?.length) throw new Error(Array.isArray(errors) ? errors.join('; ') : String(errors))
   return data?.duplicatePage?.page
