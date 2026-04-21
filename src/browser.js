@@ -131,7 +131,9 @@ export async function ensureSession() {
 
 /**
  * Run a page action with a fresh authenticated page.
- * Handles session expiry by clearing and re-prompting login once.
+ * On session expiry, throws a clear error instead of opening a headed browser
+ * mid-tool-call (which races against MCP timeouts and causes login loops).
+ * Use the reauthenticate tool to log in explicitly when needed.
  */
 async function withPage(fn) {
   await ensureSession()
@@ -162,14 +164,7 @@ async function withPage(fn) {
     const msg = err.message?.toLowerCase() ?? ''
     if (msg.includes('login') || msg.includes('401') || msg.includes('unauthorized') || msg.includes('unauthenticated')) {
       await clearSession()
-      await doHeadedLogin()
-      // Retry once with fresh session
-      const freshPage = await newAuthPage(await getBrowser())
-      try {
-        return await fn(freshPage)
-      } finally {
-        await freshPage.context().close()
-      }
+      throw new Error('Unbounce session expired. Call the reauthenticate tool to log in again, then retry.')
     }
     throw err
   } finally {
@@ -833,6 +828,14 @@ export async function renameVariant(subAccountId, pageId, variantLetter, name) {
     const newName = await directRenameVariant(page, pageId, variantLetter, name)
     return { variant: variantLetter, name: newName }
   })
+}
+
+// ── Reauthenticate ─────────────────────────────────────────────────────────────
+
+export async function reauthenticate() {
+  await clearSession()
+  await doHeadedLogin()
+  return { status: 'authenticated' }
 }
 
 // ── Cleanup ────────────────────────────────────────────────────────────────────

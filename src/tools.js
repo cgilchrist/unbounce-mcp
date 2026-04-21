@@ -20,6 +20,7 @@ import {
   getPageInsights, getPageStats, findPagesByStats, editVariantHtml, getVariantContent, addVariant,
   renameVariant, getPageVariants, getVariantPreviewUrl, screenshotVariant,
   activateVariant, deactivateVariant, promoteVariant, deleteVariant,
+  reauthenticate,
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
@@ -158,6 +159,11 @@ async function uploadAndConfigure({ fileBuffer, fileName, pageName, subAccountId
 }
 
 export const TOOL_DEFINITIONS = [
+  {
+    name: 'reauthenticate',
+    description: 'Open a browser window for the user to log in to Unbounce. Call this when any tool fails with a session expired error, then retry the original operation.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
   {
     name: 'list_accounts',
     description: 'List all Unbounce accounts accessible via the configured API key.',
@@ -703,6 +709,10 @@ export const TOOL_DEFINITIONS = [
 
 export async function handleTool(name, args) {
   switch (name) {
+    case 'reauthenticate': {
+      return reauthenticate()
+    }
+
     case 'list_accounts': {
       const accounts = await getAccounts()
       return { accounts }
