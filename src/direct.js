@@ -246,29 +246,33 @@ mutation DeleteVariant($input: DeleteVariantInput!) {
 }`
 
 export async function directActivateVariant(page, pageUuid, variantLetter) {
+  const jwt = await getJwt(page)
   const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
-  const data = await gql(page, ACTIVATE_VARIANT_MUTATION, { input: { variantId } })
+  const data = await gql(page, ACTIVATE_VARIANT_MUTATION, { input: { variantId } }, jwt)
   const errors = data?.updateVariantToChallenger?.errors
   if (errors?.length) throw new Error(String(errors))
 }
 
 export async function directDeactivateVariant(page, pageUuid, variantLetter) {
+  const jwt = await getJwt(page)
   const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
-  const data = await gql(page, DEACTIVATE_VARIANT_MUTATION, { input: { variantId } })
+  const data = await gql(page, DEACTIVATE_VARIANT_MUTATION, { input: { variantId } }, jwt)
   const errors = data?.discardVariant?.errors
   if (errors?.length) throw new Error(String(errors))
 }
 
 export async function directPromoteVariant(page, pageUuid, variantLetter) {
+  const jwt = await getJwt(page)
   const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
-  const data = await gql(page, PROMOTE_VARIANT_MUTATION, { input: { variantId } })
+  const data = await gql(page, PROMOTE_VARIANT_MUTATION, { input: { variantId } }, jwt)
   const errors = data?.promoteVariant?.errors
   if (errors?.length) throw new Error(String(errors))
 }
 
 export async function directDeleteVariant(page, pageUuid, variantLetter) {
+  const jwt = await getJwt(page)
   const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
-  const data = await gql(page, DELETE_VARIANT_MUTATION, { input: { variantId } })
+  const data = await gql(page, DELETE_VARIANT_MUTATION, { input: { variantId } }, jwt)
   const errors = data?.deleteVariant?.errors
   if (errors?.length) throw new Error(String(errors))
 }
