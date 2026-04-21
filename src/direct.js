@@ -171,44 +171,27 @@ export async function directSetTrafficMode(page, pageId, mode, variantId = null)
   if (errors?.length) throw new Error(String(errors))
 }
 
+const CHANGE_VARIANT_WEIGHTS_MUTATION = `
+mutation ChangeVariantWeightsMutation($input: ChangeVariantWeightMutationInput!) {
+  changeVariantWeights(input: $input) {
+    page {
+      id
+      championVariant { variantId variantWeight }
+      challengerVariants { nodes { variantId variantWeight } }
+    }
+    errors { message path }
+  }
+}`
+
 export async function directSetVariantWeights(page, pageId, weights) {
   const jwt = await getJwt(page)
-
-  // Resolve variant letters to Relay global IDs (the weighted config requires them)
-  const idData = await gql(page, `
-    query PageVariantIdsQuery($pageUuid: String!) {
-      page(uuid: $pageUuid) {
-        pageVariants { nodes { id variantId } }
-      }
-    }
-  `, { pageUuid: pageId }, jwt)
-  const nodes = idData?.page?.pageVariants?.nodes ?? []
-  const relayIdMap = {}
-  for (const node of nodes) {
-    if (node.variantId) relayIdMap[node.variantId.toLowerCase()] = node.id
-  }
-
-  const entries = Object.entries(weights)
-  const championLetter = entries.reduce((best, [id, w]) => w > (weights[best] ?? 0) ? id : best, entries[0][0])
-  const championId = relayIdMap[championLetter.toLowerCase()]
-  if (!championId) throw new Error(`Variant "${championLetter}" not found on page ${pageId}`)
-
-  const weightArray = entries.map(([letter, weight]) => {
-    const id = relayIdMap[letter.toLowerCase()]
-    if (!id) throw new Error(`Variant "${letter}" not found on page ${pageId}`)
-    return { id, weight }
-  })
-
-  const data = await gql(page, SET_ROUTING_MUTATION, {
-    input: {
-      pageId,
-      strategy: 'weighted',
-      config: { weighted: { championId, weights: weightArray } },
-    },
+  const weightArray = Object.entries(weights).map(([id, weight]) => ({ id, weight }))
+  const data = await gql(page, CHANGE_VARIANT_WEIGHTS_MUTATION, {
+    input: { pageId, weights: weightArray },
   }, jwt)
-  const errors = data?.setRoutingStrategy?.errors
-  if (errors?.length) throw new Error(String(errors))
-  return data?.setRoutingStrategy
+  const errors = data?.changeVariantWeights?.errors
+  if (errors?.length) throw new Error(errors.map(e => e.message).join('; '))
+  return data?.changeVariantWeights
 }
 
 // ── Variant lifecycle ─────────────────────────────────────────────────────────
