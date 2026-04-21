@@ -263,7 +263,7 @@ export async function setVariantWeights(subAccountId, pageId, weights) {
   if (values.some(v => !Number.isInteger(v) || v < 0)) throw new Error('Variant weights must be non-negative integers')
 
   return withPage(async (page) => {
-    await directSetVariantWeights(page, pageId, weights)
+    return directSetVariantWeights(page, pageId, weights)
   })
 }
 

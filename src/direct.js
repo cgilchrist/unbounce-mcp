@@ -185,6 +185,7 @@ export async function directSetVariantWeights(page, pageId, weights) {
   }, jwt)
   const errors = data?.setRoutingStrategy?.errors
   if (errors?.length) throw new Error(String(errors))
+  return data?.setRoutingStrategy
 }
 
 // ── Variant lifecycle ─────────────────────────────────────────────────────────

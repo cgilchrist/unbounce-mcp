@@ -894,15 +894,16 @@ export async function handleTool(name, args) {
 
     case 'set_variant_weights': {
       const weights = typeof args.weights === 'string' ? JSON.parse(args.weights) : args.weights
-      await setVariantWeights(args.sub_account_id, args.page_id, weights)
+      const mutationResult = await setVariantWeights(args.sub_account_id, args.page_id, weights)
       // Republish
+      let publishResult = null
       try {
         await publishPage(args.sub_account_id, args.page_id)
-        await pollPageStatus(args.page_id, 'published')
-      } catch {
-        // Page may not have been published yet
+        publishResult = await pollPageStatus(args.page_id, 'published')
+      } catch (err) {
+        publishResult = { error: err.message }
       }
-      return { success: true, weights }
+      return { weights, mutation_response: mutationResult, publish: publishResult }
     }
 
     case 'find_page': {
