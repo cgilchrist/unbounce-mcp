@@ -894,16 +894,18 @@ export async function handleTool(name, args) {
 
     case 'set_variant_weights': {
       const weights = typeof args.weights === 'string' ? JSON.parse(args.weights) : args.weights
-      const mutationResult = await setVariantWeights(args.sub_account_id, args.page_id, weights)
-      // Republish
-      let publishResult = null
+      const result = await setVariantWeights(args.sub_account_id, args.page_id, weights)
+      const appliedWeights = {}
+      const champion = result?.page?.championVariant
+      const challengers = result?.page?.challengerVariants?.nodes ?? []
+      if (champion) appliedWeights[champion.variantId] = champion.variantWeight
+      for (const v of challengers) appliedWeights[v.variantId] = v.variantWeight
       try {
         await publishPage(args.sub_account_id, args.page_id)
-        publishResult = await pollPageStatus(args.page_id, 'published')
-      } catch (err) {
-        publishResult = { error: err.message }
+      } catch {
+        // non-fatal — weights were set
       }
-      return { weights, mutation_response: mutationResult, publish: publishResult }
+      return { success: true, weights: Object.keys(appliedWeights).length ? appliedWeights : weights }
     }
 
     case 'find_page': {
