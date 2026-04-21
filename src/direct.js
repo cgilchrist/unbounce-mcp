@@ -173,9 +173,32 @@ export async function directSetTrafficMode(page, pageId, mode, variantId = null)
 
 export async function directSetVariantWeights(page, pageId, weights) {
   const jwt = await getJwt(page)
+
+  // Resolve variant letters to Relay global IDs (the weighted config requires them)
+  const idData = await gql(page, `
+    query PageVariantIdsQuery($pageUuid: String!) {
+      page(uuid: $pageUuid) {
+        pageVariants { nodes { id variantId } }
+      }
+    }
+  `, { pageUuid: pageId }, jwt)
+  const nodes = idData?.page?.pageVariants?.nodes ?? []
+  const relayIdMap = {}
+  for (const node of nodes) {
+    if (node.variantId) relayIdMap[node.variantId.toLowerCase()] = node.id
+  }
+
   const entries = Object.entries(weights)
-  const championId = entries.reduce((best, [id, w]) => w > (weights[best] ?? 0) ? id : best, entries[0][0])
-  const weightArray = entries.map(([id, weight]) => ({ id, weight }))
+  const championLetter = entries.reduce((best, [id, w]) => w > (weights[best] ?? 0) ? id : best, entries[0][0])
+  const championId = relayIdMap[championLetter.toLowerCase()]
+  if (!championId) throw new Error(`Variant "${championLetter}" not found on page ${pageId}`)
+
+  const weightArray = entries.map(([letter, weight]) => {
+    const id = relayIdMap[letter.toLowerCase()]
+    if (!id) throw new Error(`Variant "${letter}" not found on page ${pageId}`)
+    return { id, weight }
+  })
+
   const data = await gql(page, SET_ROUTING_MUTATION, {
     input: {
       pageId,
