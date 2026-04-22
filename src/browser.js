@@ -125,7 +125,7 @@ export async function ensureSession() {
   if (_session) return
   const loaded = await loadSession()
   if (!loaded) {
-    await doHeadedLogin()
+    throw new Error('No Unbounce session found. Call the reauthenticate tool to log in.')
   }
 }
 
