@@ -108,7 +108,12 @@ export async function doHeadedLogin() {
   const context = await browser.newContext()
   const page = await context.newPage()
 
-  // Log all non-2xx responses during login to help diagnose failures
+  // Log the sign_in POST request and all non-2xx responses to diagnose failures
+  page.on('request', req => {
+    if (req.url().includes('/users/sign_in') && req.method() === 'POST') {
+      console.error(`[unbounce-mcp] Login POST headers: ${JSON.stringify(req.headers())}`)
+    }
+  })
   page.on('response', res => {
     if (res.status() >= 400) {
       console.error(`[unbounce-mcp] Login: ${res.status()} ${res.request().method()} ${res.url()}`)
@@ -116,10 +121,11 @@ export async function doHeadedLogin() {
     }
   })
 
-  // Navigate to the sign-in page directly so app.unbounce.com sets its session
-  // and CSRF cookies before the redirect to signin.unbounce.com happens.
-  // Without this, cross-site SameSite=Lax cookie rules block the form POST back.
   await page.goto(`${UNBOUNCE_APP_BASE}/users/sign_in`)
+
+  // Log cookies so we can see what app.unbounce.com set during the redirect
+  const cookiesAfterGoto = await context.cookies()
+  console.error(`[unbounce-mcp] Cookies after goto: ${JSON.stringify(cookiesAfterGoto.map(c => ({ name: c.name, domain: c.domain, sameSite: c.sameSite })))}`)
 
   // Wait for successful login — URL should contain /pages or /dashboard
   console.error('[unbounce-mcp] Please log in to Unbounce in the browser window.')
