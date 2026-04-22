@@ -65,6 +65,9 @@ const LAYOUT_OVERRIDES = `
 #lp-code-1 h4, #lp-code-1 h5, #lp-code-1 h6 {
   font-weight: revert;
 }
+html {
+  height: auto !important;
+}
 body.lp-pom-body {
   height: auto !important;
   margin: 0 !important;
