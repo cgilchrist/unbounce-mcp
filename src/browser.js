@@ -108,6 +108,13 @@ export async function doHeadedLogin() {
   const context = await browser.newContext()
   const page = await context.newPage()
 
+  // Log all non-2xx responses during login to help diagnose failures
+  page.on('response', res => {
+    if (res.status() >= 400) {
+      console.error(`[unbounce-mcp] Login: ${res.status()} ${res.request().method()} ${res.url()}`)
+    }
+  })
+
   await page.goto(`${UNBOUNCE_APP_BASE}`)
 
   // Wait for successful login — URL should contain /pages or /dashboard
