@@ -104,14 +104,8 @@ async function newAuthPage(browser) {
  */
 export async function doHeadedLogin() {
   console.error('[unbounce-mcp] No session found. Opening browser for login...')
-  const browser = await chromium.launch({
-    headless: false,
-    args: ['--disable-blink-features=AutomationControlled'],
-  })
-  const context = await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  })
-  await context.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }) })
+  const browser = await chromium.launch({ headless: false })
+  const context = await browser.newContext()
   const page = await context.newPage()
 
   await page.goto(`${UNBOUNCE_APP_BASE}`)
@@ -856,8 +850,10 @@ export async function renameVariant(subAccountId, pageId, variantLetter, name) {
 
 export async function reauthenticate() {
   await clearSession()
-  await doHeadedLogin()
-  return { status: 'authenticated' }
+  // Fire and forget — don't await so the MCP tool call returns immediately
+  // before the user finishes logging in (including 2FA).
+  doHeadedLogin().catch(err => console.error('[unbounce-mcp] Login error:', err.message))
+  return { status: 'browser_opened', message: 'Login browser is open. Complete sign-in including 2FA, then retry your request once the window closes.' }
 }
 
 // ── Cleanup ────────────────────────────────────────────────────────────────────
