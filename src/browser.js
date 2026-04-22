@@ -108,26 +108,8 @@ export async function doHeadedLogin() {
   const context = await browser.newContext()
   const page = await context.newPage()
 
-  // Log the sign_in POST request and all non-2xx responses to diagnose failures
-  page.on('request', req => {
-    if (req.url().includes('/users/sign_in') && req.method() === 'POST') {
-      console.error(`[unbounce-mcp] Login POST headers: ${JSON.stringify(req.headers())}`)
-    }
-  })
-  page.on('response', res => {
-    if (res.status() >= 400) {
-      console.error(`[unbounce-mcp] Login: ${res.status()} ${res.request().method()} ${res.url()}`)
-      res.text().then(body => console.error(`[unbounce-mcp] Login response body: ${body.slice(0, 300)}`)).catch(() => {})
-    }
-  })
+  await page.goto(`${UNBOUNCE_APP_BASE}`)
 
-  await page.goto(`${UNBOUNCE_APP_BASE}/users/sign_in`)
-
-  // Log cookies so we can see what app.unbounce.com set during the redirect
-  const cookiesAfterGoto = await context.cookies()
-  console.error(`[unbounce-mcp] Cookies after goto: ${JSON.stringify(cookiesAfterGoto.map(c => ({ name: c.name, domain: c.domain, sameSite: c.sameSite })))}`)
-
-  // Wait for successful login — URL should contain /pages or /dashboard
   console.error('[unbounce-mcp] Please log in to Unbounce in the browser window.')
   await page.waitForURL(url => url.href.includes('/pages') || url.href.includes('/dashboard'), { timeout: 300000 })
 
