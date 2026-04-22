@@ -245,6 +245,18 @@ mutation DeleteVariant($input: DeleteVariantInput!) {
   }
 }`
 
+const DUPLICATE_VARIANT_MUTATION = `
+mutation DuplicateVariant($input: DuplicateVariantInput!) {
+  duplicateVariant(input: $input) {
+    page {
+      pageVariants {
+        nodes { id variantId name state }
+      }
+    }
+    errors
+  }
+}`
+
 export async function directActivateVariant(page, pageUuid, variantLetter) {
   const jwt = await getJwt(page)
   const variantId = await getVariantRelayId(page, pageUuid, variantLetter)
@@ -275,6 +287,33 @@ export async function directDeleteVariant(page, pageUuid, variantLetter) {
   const data = await gql(page, DELETE_VARIANT_MUTATION, { input: { variantId } }, jwt)
   const errors = data?.deleteVariant?.errors
   if (errors?.length) throw new Error(String(errors))
+}
+
+export async function directDuplicateVariant(page, pageUuid, variantLetter) {
+  const jwt = await getJwt(page)
+
+  // Fetch all variants in one query: relay ID for the source + existing letters to identify the new one
+  const beforeData = await gql(page, `
+    query PageVariantIdsQuery($pageUuid: String!) {
+      page(uuid: $pageUuid) {
+        pageVariants { nodes { id variantId } }
+      }
+    }
+  `, { pageUuid }, jwt)
+  const nodes = beforeData?.page?.pageVariants?.nodes ?? []
+  const existingLetters = new Set(nodes.map(n => n.variantId?.toLowerCase()))
+  const sourceNode = nodes.find(n => n.variantId?.toLowerCase() === variantLetter.toLowerCase())
+  if (!sourceNode) throw new Error(`Variant "${variantLetter}" not found on page ${pageUuid}`)
+
+  const data = await gql(page, DUPLICATE_VARIANT_MUTATION, { input: { variantId: sourceNode.id } }, jwt)
+  const errors = data?.duplicateVariant?.errors
+  if (errors?.length) throw new Error(String(errors))
+
+  const allVariants = data?.duplicateVariant?.page?.pageVariants?.nodes ?? []
+  const newVariant = allVariants.find(n => !existingLetters.has(n.variantId?.toLowerCase()))
+  if (!newVariant) throw new Error('Could not identify the newly duplicated variant from response')
+
+  return { variant: newVariant.variantId.toLowerCase(), name: newVariant.name, state: newVariant.state }
 }
 
 // ── Variant get / edit ─────────────────────────────────────────────────────────

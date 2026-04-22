@@ -22,6 +22,7 @@ import {
   directSearchPages, directGetPageInsights, directGetPageStats,
   directGetBulkPageStats, directGetPageVariants, directGetVariantPreviewUrl,
   directActivateVariant, directDeactivateVariant, directPromoteVariant, directDeleteVariant,
+  directDuplicateVariant,
 } from './direct.js'
 
 let _browser = null
@@ -817,6 +818,14 @@ export async function addVariant(subAccountId, pageId, html, css) {
     }
 
     return { variant: newLetter, numericId: newNumericId, status: html || css ? 'created_and_edited' : 'created' }
+  })
+}
+
+// ── Duplicate variant ──────────────────────────────────────────────────────────
+
+export async function duplicateVariant(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    return directDuplicateVariant(page, pageId, variantLetter)
   })
 }
 

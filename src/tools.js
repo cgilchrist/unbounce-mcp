@@ -18,7 +18,7 @@ import {
   getUploadCredentials, setPageUrl, setTrafficMode,
   setVariantWeights, publishPage, unpublishPage, deletePage, duplicatePage, findPages,
   getPageInsights, getPageStats, findPagesByStats, editVariantHtml, getVariantContent, addVariant,
-  renameVariant, getPageVariants, getVariantPreviewUrl, screenshotVariant,
+  renameVariant, duplicateVariant, getPageVariants, getVariantPreviewUrl, screenshotVariant,
   activateVariant, deactivateVariant, promoteVariant, deleteVariant,
   reauthenticate,
 } from './browser.js'
@@ -574,6 +574,19 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'duplicate_variant',
+    description: 'Duplicate any existing variant on an Unbounce page. Returns the new variant letter. Unlike add_variant (which only copies variant A), this lets you clone any variant. After duplicating, call rename_variant to give it a descriptive name, then edit_variant to update its content, then republish.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Letter of the variant to duplicate: a, b, c, etc.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant'],
+    },
+  },
+  {
     name: 'rename_variant',
     description: 'Rename a variant on an Unbounce page.',
     inputSchema: {
@@ -962,6 +975,10 @@ export async function handleTool(name, args) {
       const html = args.html || (args.html_file_path ? await fs.promises.readFile(args.html_file_path, 'utf8') : null)
       const css = args.css || (args.css_file_path ? await fs.promises.readFile(args.css_file_path, 'utf8') : null)
       return addVariant(args.sub_account_id, args.page_id, html, css)
+    }
+
+    case 'duplicate_variant': {
+      return duplicateVariant(args.sub_account_id, args.page_id, args.variant)
     }
 
     case 'rename_variant': {
