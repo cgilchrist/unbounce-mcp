@@ -30,10 +30,18 @@ let _session = null // { cookies: [{name, value, domain, ...}], csrfToken: strin
 
 // ── Session persistence ────────────────────────────────────────────────────────
 
+const AUTH_COOKIE_NAMES = new Set(['_lp-webapp_session', '_lp-webapp_remember_token'])
+
+function filterAuthCookies(cookies) {
+  return (cookies ?? []).filter(c => AUTH_COOKIE_NAMES.has(c.name))
+}
+
 async function loadSession() {
   try {
     const raw = await fs.promises.readFile(SESSION_FILE, 'utf8')
     _session = JSON.parse(raw)
+    // Strip down to auth cookies only — handles legacy sessions with full cookie dumps
+    if (_session.cookies) _session.cookies = filterAuthCookies(_session.cookies)
     return true
   } catch {
     return false
@@ -106,7 +114,7 @@ export async function doHeadedLogin() {
   console.error('[unbounce-mcp] Please log in to Unbounce in the browser window.')
   await page.waitForURL(url => url.href.includes('/pages') || url.href.includes('/dashboard'), { timeout: 300000 })
 
-  const cookies = await context.cookies()
+  const cookies = filterAuthCookies(await context.cookies())
   const csrfToken = await grabCsrfToken(page)
 
   await browser.close()
