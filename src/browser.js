@@ -112,10 +112,14 @@ export async function doHeadedLogin() {
   page.on('response', res => {
     if (res.status() >= 400) {
       console.error(`[unbounce-mcp] Login: ${res.status()} ${res.request().method()} ${res.url()}`)
+      res.text().then(body => console.error(`[unbounce-mcp] Login response body: ${body.slice(0, 300)}`)).catch(() => {})
     }
   })
 
-  await page.goto(`${UNBOUNCE_APP_BASE}`)
+  // Navigate to the sign-in page directly so app.unbounce.com sets its session
+  // and CSRF cookies before the redirect to signin.unbounce.com happens.
+  // Without this, cross-site SameSite=Lax cookie rules block the form POST back.
+  await page.goto(`${UNBOUNCE_APP_BASE}/users/sign_in`)
 
   // Wait for successful login — URL should contain /pages or /dashboard
   console.error('[unbounce-mcp] Please log in to Unbounce in the browser window.')
