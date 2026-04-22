@@ -848,11 +848,14 @@ export async function renameVariant(subAccountId, pageId, variantLetter, name) {
 // ── Reauthenticate ─────────────────────────────────────────────────────────────
 
 export async function reauthenticate() {
-  await clearSession()
-  // Fire and forget — don't await so the MCP tool call returns immediately
-  // before the user finishes logging in (including 2FA).
+  // Clear JWT cache immediately so the next tool call fetches a fresh token.
+  // Do NOT delete the session file — keep existing cookies alive during login
+  // so in-flight tool calls don't race against a missing session.
+  // doHeadedLogin will overwrite the session file when login completes.
+  clearJwtCache()
+  _session = null
   doHeadedLogin().catch(err => console.error('[unbounce-mcp] Login error:', err.message))
-  return { status: 'browser_opened', message: 'Login browser is open. Complete sign-in including 2FA, then retry your request once the window closes.' }
+  return { status: 'browser_opened', message: 'Login browser is open. Complete sign-in in the browser window. Tell me when the window has closed and I will retry.' }
 }
 
 // ── Cleanup ────────────────────────────────────────────────────────────────────

@@ -41,6 +41,8 @@ Then ensure the new variant preserves the existing brand identity — colors, ty
 
 ${VARIANT_CREATION_RULES}
 
+When reauthenticate returns status "browser_opened": stop all tool calls immediately and tell the user the browser is open and to let you know once they have signed in and the window has closed. Do NOT retry any tool until the user explicitly confirms login is complete.
+
 When setting up an A/B test on a page that was in standard mode (single variant), follow this exact order:
 1. set_traffic_mode(ab_test) — switch to A/B test routing FIRST. Do this before activate_variant, because activate_variant behaves differently per mode: in standard mode it replaces the champion (wrong); in A/B test mode it adds the variant as a challenger (correct).
 2. activate_variant on the new challenger variant.
