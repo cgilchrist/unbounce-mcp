@@ -125,6 +125,8 @@ export function scopeCssToContainer(css, scope) {
         if (/^html\b/.test(s)) return s.replace(/^html\b/, scope)
         if (/^body\.lp-pom-body/.test(s)) return s
         if (/^body\b/.test(s)) return s
+        // Already scoped — don't double-prefix
+        if (s === scope || s.startsWith(`${scope} `) || s.startsWith(`${scope}.`) || s.startsWith(`${scope}[`) || s.startsWith(`${scope}:`)) return s
         return `${scope} ${s}`
       })
       .join(', ')
@@ -266,7 +268,8 @@ export function transformForms($, variantId) {
   const validationRules = {}
   const validationMessages = {}
 
-  forms.each((formIdx, form) => {
+  let formIdx = 0
+  forms.each((_, form) => {
     const $form = $(form)
     $form.attr('method', 'POST')
     $form.removeAttr('onsubmit')
@@ -279,10 +282,13 @@ export function transformForms($, variantId) {
       }
     })
 
-    $form.prepend(
-      `<input type="hidden" name="pageVariant" value="${variantId}">` +
-      `<input type="hidden" name="pageId" value="">`
-    )
+    // Idempotent: only add hidden fields if not already present
+    if (!$form.find('input[name="pageVariant"]').length) {
+      $form.prepend(
+        `<input type="hidden" name="pageVariant" value="${variantId}">` +
+        `<input type="hidden" name="pageId" value="">`
+      )
+    }
 
     $form.find('input:not([type="hidden"]):not([type="submit"]):not([type="button"]), select, textarea').each((_, el) => {
       const $el = $(el)
@@ -295,8 +301,11 @@ export function transformForms($, variantId) {
         $el.attr('name', labelText ? labelToName(labelText) : `field_${Math.random().toString(36).slice(2, 7)}`)
       }
 
+      // Idempotent: only add class if not already present
       const existingClass = $el.attr('class') || ''
-      $el.attr('class', (existingClass + ' ub-input-item').trim())
+      if (!existingClass.split(/\s+/).includes('ub-input-item')) {
+        $el.attr('class', (existingClass + ' ub-input-item').trim())
+      }
 
       const name = $el.attr('name')
       const required = $el.attr('required') !== undefined
@@ -308,7 +317,11 @@ export function transformForms($, variantId) {
       validationMessages[name] = {}
     })
 
-    $form.wrap(`<div class="lp-element lp-pom-form" id="lp-pom-form-${formIdx + 1}"></div>`)
+    // Idempotent: only wrap if not already inside .lp-pom-form
+    if (!$form.closest('.lp-pom-form').length) {
+      formIdx++
+      $form.wrap(`<div class="lp-element lp-pom-form" id="lp-pom-form-${formIdx}"></div>`)
+    }
   })
 
   const ubForm = {
@@ -323,9 +336,13 @@ export function transformForms($, variantId) {
     },
     isConversionGoal: true,
   }
-  $('body').prepend(`<script>window.ub.form=${JSON.stringify(ubForm)};window.module={lp:{form:{data:window.ub.form}}};</script>`)
 
-  $('body').append(`<script>
+  // Idempotent: only inject scripts if not already present
+  if (!$('script').toArray().some(s => $(s).html()?.includes('window.ub.form='))) {
+    $('body').prepend(`<script>window.ub.form=${JSON.stringify(ubForm)};window.module={lp:{form:{data:window.ub.form}}};</script>`)
+  }
+  if (!$('script').toArray().some(s => $(s).html()?.includes('.lp-pom-form form'))) {
+    $('body').append(`<script>
 (function(){
   function init(n){
     if(n>100) return;
@@ -343,6 +360,7 @@ export function transformForms($, variantId) {
   init(0);
 })();
 </script>`)
+  }
 
   return true
 }
@@ -376,7 +394,7 @@ export function extractCss($) {
     const css = scopeCssToContainer(bodyScoped, '#lp-code-1')
     cssChunks.push(css)
   })
-  cssChunks.push(LAYOUT_OVERRIDES)
+  if (!cssChunks.join('\n').includes('ubexport layout overrides')) cssChunks.push(LAYOUT_OVERRIDES)
   const styleBlock = `<style>\n${cssChunks.join('\n')}\n</style>`
   return linkTags ? `${linkTags}\n${styleBlock}` : styleBlock
 }
@@ -386,11 +404,17 @@ export function extractCss($) {
  * block with layout overrides appended. Ready for lp-stylesheet-1.content.html.
  */
 export function scopeRawCss(css) {
-  // Strip any existing <style> wrapper the caller may have included
-  const raw = decodeHtmlEntities(css.replace(/^\s*<style[^>]*>/i, '').replace(/<\/style>\s*$/i, ''))
+  // Strip any existing <style> wrapper and any embedded <link> tags
+  const raw = decodeHtmlEntities(
+    css
+      .replace(/^\s*<style[^>]*>/i, '')
+      .replace(/<\/style>\s*$/i, '')
+      .replace(/<link[^>]*>/gi, '')
+  )
   const bodyScoped = raw.replace(/(?<![a-zA-Z0-9_.#-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
   const scoped = scopeCssToContainer(bodyScoped, '#lp-code-1')
-  return `<style>\n${scoped}\n${LAYOUT_OVERRIDES}\n</style>`
+  const overrides = scoped.includes('ubexport layout overrides') ? '' : `\n${LAYOUT_OVERRIDES}`
+  return `<style>\n${scoped}${overrides}\n</style>`
 }
 
 /**
