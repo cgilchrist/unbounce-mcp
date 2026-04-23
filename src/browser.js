@@ -944,8 +944,15 @@ export async function reauthenticate() {
   // doHeadedLogin will overwrite the session file when login completes.
   clearJwtCache()
   _session = null
-  doHeadedLogin().catch(err => console.error('[unbounce-mcp] Login error:', err.message))
-  return { status: 'browser_opened', message: 'Login browser is open. Complete sign-in in the browser window. Tell me when the window has closed and I will retry.' }
+  try {
+    // Block until login finishes so the agent can auto-retry the original
+    // operation as soon as this tool call returns. doHeadedLogin has a 5-min
+    // waitForURL timeout, so abandoned logins fail cleanly rather than hang.
+    await doHeadedLogin()
+    return { status: 'authenticated', message: 'Login complete. Retry the original operation.' }
+  } catch (err) {
+    return { status: 'login_failed', message: `Login did not complete: ${err.message}` }
+  }
 }
 
 // ── Cleanup ────────────────────────────────────────────────────────────────────
