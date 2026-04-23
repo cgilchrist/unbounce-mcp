@@ -460,33 +460,35 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
     const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
     if (!iframeSrc) throw new Error('Preview iframe not found — page may not have loaded')
 
-    // Navigate directly to the iframe URL for a clean screenshot (no Unbounce toolbar)
+    // The preview chain has two iframe levels:
+    //   1. preview wrapper → #page-preview iframe → intermediate page
+    //   2. intermediate page → #page-preview-output iframe → actual landing page
+    // Navigate through both to reach the real content.
     await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
+    const innerSrc = await page.evaluate(() => document.getElementById('page-preview-output')?.src)
+    if (innerSrc) {
+      await page.goto(innerSrc, { waitUntil: 'networkidle', timeout: 30000 })
+    }
 
-    // TEMPORARY DIAGNOSTIC — return page dimension data instead of screenshot
-    await page.setViewportSize({ width: 1280, height: 900 })
-    const diag = await page.evaluate(() => {
-      const lpPom = document.getElementById('lp-pom-root')
-      const lpPomBCR = lpPom?.getBoundingClientRect()
-      let maxBCR = 0
-      const topElements = []
+    // scrollHeight is unusable here: Unbounce sets html/body to height:100%, so scrollHeight
+    // equals the viewport height regardless of page content. getBoundingClientRect().bottom
+    // returns each element's actual rendered pixel position — even for elements that overflow
+    // their parent — so scanning all elements gives the true page height.
+    const getFullHeight = () => page.evaluate(() => {
+      let max = window.innerHeight
       document.querySelectorAll('*').forEach(el => {
-        const b = el.getBoundingClientRect().bottom + window.pageYOffset
-        if (b > maxBCR) { maxBCR = b; }
-        if (b > 800) topElements.push({ tag: el.tagName, id: el.id, cls: el.className?.toString?.().slice(0,40), bottom: Math.round(b) })
+        try {
+          const b = el.getBoundingClientRect().bottom + window.pageYOffset
+          if (b > max) max = b
+        } catch (_) {}
       })
-      return {
-        innerH: window.innerHeight,
-        innerW: window.innerWidth,
-        scrollH: document.documentElement.scrollHeight,
-        bodyScrollH: document.body?.scrollHeight,
-        lpPomOffsetH: lpPom?.offsetHeight,
-        lpPomBCR: lpPomBCR ? { top: Math.round(lpPomBCR.top), bottom: Math.round(lpPomBCR.bottom) } : null,
-        maxBCR: Math.round(maxBCR),
-        deepElements: topElements.slice(0, 20),
-      }
+      return Math.ceil(max)
     })
-    return { _type: 'text', text: '```json\n' + JSON.stringify(diag, null, 2) + '\n```' }
+
+    await page.setViewportSize({ width: 1280, height: 900 })
+    const desktopHeight = await getFullHeight()
+    await page.setViewportSize({ width: 1280, height: desktopHeight })
+    const desktopBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
 
     await page.setViewportSize({ width: 390, height: 844 })
     await page.waitForTimeout(500)
