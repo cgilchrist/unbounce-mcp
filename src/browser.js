@@ -170,8 +170,11 @@ async function withPage(fn, contextOptions = {}) {
   try {
     return await fn(page)
   } catch (err) {
-    const msg = err.message?.toLowerCase() ?? ''
-    if (msg.includes('login') || msg.includes('401') || msg.includes('unauthorized') || msg.includes('unauthenticated')) {
+    // Only treat as "session expired" when the JWT-fetch endpoint itself
+    // returned 401 — that's the one case where the session cookies are truly
+    // invalid and a re-login is required. Everything else (stale JWT, gateway
+    // UNAUTHENTICATED on the first try) is handled by auto-refresh inside gql().
+    if (/JWT fetch HTTP 401/.test(err.message ?? '')) {
       throw new Error('Unbounce session expired. Call the reauthenticate tool to log in again, then retry.')
     }
     throw err

@@ -16,22 +16,36 @@ const APP_BASE = 'https://app.unbounce.com'
  * Run a GraphQL mutation/query using Playwright's request context (inherits cookies).
  */
 async function gql(page, query, variables, jwt) {
+  let token = jwt ?? await getJwt(page)
   const req = page.context().request
-  const res = await req.post(GATEWAY, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(jwt ? { 'Authorization': `Bearer ${jwt}` } : {}),
-    },
-    data: JSON.stringify({ query, variables }),
-  })
-  if (!res.ok()) {
-    const body = await res.text().catch(() => '')
-    throw new Error(`GraphQL HTTP ${res.status()}: ${body.slice(0, 200)}`)
+  const runOnce = async (t) => {
+    const res = await req.post(GATEWAY, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${t}`,
+      },
+      data: JSON.stringify({ query, variables }),
+    })
+    const status = res.status()
+    const text = await res.text().catch(() => '')
+    let body = null
+    try { body = text ? JSON.parse(text) : null } catch {}
+    return { status, text, body, ok: res.ok() }
   }
-  const result = await res.json()
-  const errors = result?.errors
+
+  let r = await runOnce(token)
+  const isUnauthenticated =
+    r.status === 401 ||
+    r.body?.errors?.some(e => e.extensions?.code === 'UNAUTHENTICATED')
+  if (isUnauthenticated) {
+    token = await getJwt(page, { forceRefresh: true })
+    r = await runOnce(token)
+  }
+
+  if (!r.ok) throw new Error(`GraphQL HTTP ${r.status}: ${r.text.slice(0, 200)}`)
+  const errors = r.body?.errors
   if (errors?.length) throw new Error(errors.map(e => e.message).join('; '))
-  return result?.data
+  return r.body?.data
 }
 
 /**
@@ -366,12 +380,27 @@ function buildSaveXml(fullResponse) {
 
 let _jwtCache = null // { token: string, expiresAt: number }
 
+function decodeJwtExp(token) {
+  try {
+    const payload = token.split('.')[1]
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const json = Buffer.from(normalized, 'base64').toString('utf8')
+    const { exp } = JSON.parse(json)
+    return typeof exp === 'number' ? exp : null
+  } catch {
+    return null
+  }
+}
+
 /**
- * Obtain a JWT token for authenticating editor API calls.
- * Cached in memory for 50 minutes to avoid a page navigation on every call.
+ * Obtain a JWT token for authenticating editor API calls. Cached until the
+ * token's own `exp` claim (minus a 60s safety margin), so we never send an
+ * expired JWT. A 401 from this endpoint means the session cookies themselves
+ * are invalid — that error message is what the browser.js classifier watches
+ * for to decide when a real re-login is needed.
  */
-async function getJwt(page) {
-  if (_jwtCache && Date.now() < _jwtCache.expiresAt) {
+async function getJwt(page, { forceRefresh = false } = {}) {
+  if (!forceRefresh && _jwtCache && Date.now() < _jwtCache.expiresAt) {
     return _jwtCache.token
   }
   let csrf = await getCsrf(page)
@@ -391,7 +420,10 @@ async function getJwt(page) {
   const data = await res.json()
   const token = data.token
   if (!token) throw new Error(`JWT response missing token (keys: ${JSON.stringify(Object.keys(data))})`)
-  _jwtCache = { token, expiresAt: Date.now() + 50 * 60 * 1000 }
+
+  const exp = decodeJwtExp(token)
+  const expiresAt = exp ? exp * 1000 - 60 * 1000 : Date.now() + 15 * 60 * 1000
+  _jwtCache = { token, expiresAt }
   return token
 }
 
@@ -550,31 +582,19 @@ mutation RenameVariant($input: RenameVariantInput!) {
 }`
 
 export async function directRenameVariant(page, pageUuid, variantLetter, name) {
-  // Get numeric ID via the existing working path, then derive the relay ID
   const jwt = await getJwt(page)
   const variantIds = await directGetVariantNumericIds(page, pageUuid)
   const numericId = variantIds[variantLetter.toLowerCase()]
   if (!numericId) throw new Error(`Variant "${variantLetter}" not found on page ${pageUuid}`)
   const relayId = Buffer.from(`PageVariant-${numericId}`).toString('base64')
 
-  // Make the mutation via page.evaluate so browser cookies + JWT both flow correctly
-  const payload = JSON.stringify({
-    query: RENAME_VARIANT_MUTATION,
-    variables: { input: { variantId: relayId, name } },
-  })
-  const result = await page.evaluate(async ([url, body, token]) => {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body,
-    })
-    return res.json()
-  }, [GATEWAY, payload, jwt])
+  const data = await gql(page, RENAME_VARIANT_MUTATION, {
+    input: { variantId: relayId, name },
+  }, jwt)
 
-  const errors = result?.data?.renameVariant?.errors
+  const errors = data?.renameVariant?.errors
   if (errors?.length) throw new Error(String(errors))
-  if (result?.errors?.length) throw new Error(result.errors.map(e => e.message).join('; '))
-  return result?.data?.renameVariant?.variant?.name
+  return data?.renameVariant?.variant?.name
 }
 
 // ── Create variant from scratch ────────────────────────────────────────────────
