@@ -473,7 +473,7 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
           { data: mobileBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (mobile 390px)` },
         ],
       }
-    }, { deviceScaleFactor: 2 })
+    })
   }
 
   // ── Preview mode (default) ──────────────────────────────────────────────────
@@ -547,7 +547,7 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
         { data: mobileBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (mobile 390px)` },
       ],
     }
-  }, { deviceScaleFactor: 2 })
+  })
 }
 
 // ── Duplicate page ─────────────────────────────────────────────────────────────
