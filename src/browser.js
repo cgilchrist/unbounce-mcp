@@ -463,25 +463,30 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
     // Navigate directly to the iframe URL for a clean screenshot (no Unbounce toolbar)
     await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
 
-    // scrollHeight is unusable here: Unbounce sets html/body to height:100%, so scrollHeight
-    // equals the viewport height regardless of page content. getBoundingClientRect().bottom
-    // returns each element's actual rendered pixel position — even for elements that overflow
-    // their parent — so scanning all elements gives the true page height.
-    const getFullHeight = () => page.evaluate(() => {
-      let max = window.innerHeight
-      document.querySelectorAll('*').forEach(el => {
-        try {
-          const b = el.getBoundingClientRect().bottom + window.pageYOffset
-          if (b > max) max = b
-        } catch (_) {}
-      })
-      return Math.ceil(max)
-    })
-
+    // TEMPORARY DIAGNOSTIC — return page dimension data instead of screenshot
     await page.setViewportSize({ width: 1280, height: 900 })
-    const desktopHeight = await getFullHeight()
-    await page.setViewportSize({ width: 1280, height: desktopHeight })
-    const desktopBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
+    const diag = await page.evaluate(() => {
+      const lpPom = document.getElementById('lp-pom-root')
+      const lpPomBCR = lpPom?.getBoundingClientRect()
+      let maxBCR = 0
+      const topElements = []
+      document.querySelectorAll('*').forEach(el => {
+        const b = el.getBoundingClientRect().bottom + window.pageYOffset
+        if (b > maxBCR) { maxBCR = b; }
+        if (b > 800) topElements.push({ tag: el.tagName, id: el.id, cls: el.className?.toString?.().slice(0,40), bottom: Math.round(b) })
+      })
+      return {
+        innerH: window.innerHeight,
+        innerW: window.innerWidth,
+        scrollH: document.documentElement.scrollHeight,
+        bodyScrollH: document.body?.scrollHeight,
+        lpPomOffsetH: lpPom?.offsetHeight,
+        lpPomBCR: lpPomBCR ? { top: Math.round(lpPomBCR.top), bottom: Math.round(lpPomBCR.bottom) } : null,
+        maxBCR: Math.round(maxBCR),
+        deepElements: topElements.slice(0, 20),
+      }
+    })
+    return { _type: 'text', text: '```json\n' + JSON.stringify(diag, null, 2) + '\n```' }
 
     await page.setViewportSize({ width: 390, height: 844 })
     await page.waitForTimeout(500)
