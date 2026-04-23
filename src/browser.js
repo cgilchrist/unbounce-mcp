@@ -511,45 +511,33 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
       })
     }
 
-    const screenshotAtSize = async (width, height) => {
-      await page.evaluate(([w, h]) => {
+    // Resize iframe to target width first, wait for reflow, measure height, then screenshot.
+    // Order matters: measuring before resize returns the previous width's height (proven by diagnostic).
+    const captureAtWidth = async (width) => {
+      await page.setViewportSize({ width, height: 900 })
+      await page.evaluate((w) => {
         const iframe = document.getElementById('page-preview-output')
         if (iframe) {
           iframe.style.setProperty('width', w + 'px', 'important')
-          iframe.style.setProperty('height', h + 'px', 'important')
           iframe.style.setProperty('border', 'none', 'important')
           iframe.style.setProperty('display', 'block', 'important')
         }
         document.documentElement.style.cssText = 'margin:0;padding:0;'
         document.body.style.cssText = 'margin:0;padding:0;'
-      }, [width, height])
+      }, width)
+      await page.waitForTimeout(400)
+      const height = await getContentHeight()
+      await page.evaluate((h) => {
+        const iframe = document.getElementById('page-preview-output')
+        if (iframe) iframe.style.setProperty('height', h + 'px', 'important')
+      }, height)
       await page.setViewportSize({ width, height })
       await page.waitForTimeout(200)
       return page.screenshot({ type: 'jpeg', quality: 80 })
     }
 
-    await page.setViewportSize({ width: 1280, height: 900 })
-    const desktopHeight = await getContentHeight()
-    const desktopBuffer = await screenshotAtSize(1280, desktopHeight)
-
-    // DIAGNOSTIC: measure height before and after resizing iframe to 390px
-    await page.setViewportSize({ width: 390, height: 844 })
-    await page.waitForTimeout(500)
-    const mobileHeightBeforeResize = await getContentHeight()
-
-    // now resize the iframe to 390px wide and re-measure
-    await page.evaluate(() => {
-      const iframe = document.getElementById('page-preview-output')
-      if (iframe) iframe.style.setProperty('width', '390px', 'important')
-    })
-    await page.waitForTimeout(500)
-    const mobileHeightAfterResize = await getContentHeight()
-
-    return { _type: 'text', text: JSON.stringify({ desktopHeight, mobileHeightBeforeResize, mobileHeightAfterResize }) }
-
-    // eslint-disable-next-line no-unreachable
-    const mobileHeight = mobileHeightAfterResize
-    const mobileBuffer = await screenshotAtSize(390, mobileHeight)
+    const desktopBuffer = await captureAtWidth(1280)
+    const mobileBuffer = await captureAtWidth(390)
 
     const label = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
     return {
