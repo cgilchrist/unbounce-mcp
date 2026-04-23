@@ -463,16 +463,31 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
     // Navigate directly to the iframe URL for a clean screenshot (no Unbounce toolbar)
     await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
 
-    // height:1 is intentional — Unbounce pages use `html, body { height: 100% }` which makes
-    // scrollHeight equal the viewport height. Setting height to 1px collapses those wrapper
-    // elements so the actual content (e.g. #lp-pom-root) drives scrollHeight, letting
-    // fullPage:true capture the entire page rather than just the viewport.
-    await page.setViewportSize({ width: 1280, height: 1 })
-    const desktopBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+    // scrollHeight is unusable here: Unbounce sets html/body to height:100%, so scrollHeight
+    // equals the viewport height regardless of page content. getBoundingClientRect().bottom
+    // returns each element's actual rendered pixel position — even for elements that overflow
+    // their parent — so scanning all elements gives the true page height.
+    const getFullHeight = () => page.evaluate(() => {
+      let max = window.innerHeight
+      document.querySelectorAll('*').forEach(el => {
+        try {
+          const b = el.getBoundingClientRect().bottom + window.pageYOffset
+          if (b > max) max = b
+        } catch (_) {}
+      })
+      return Math.ceil(max)
+    })
 
-    await page.setViewportSize({ width: 390, height: 1 })
+    await page.setViewportSize({ width: 1280, height: 900 })
+    const desktopHeight = await getFullHeight()
+    await page.setViewportSize({ width: 1280, height: desktopHeight })
+    const desktopBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
+
+    await page.setViewportSize({ width: 390, height: 844 })
     await page.waitForTimeout(500)
-    const mobileBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+    const mobileHeight = await getFullHeight()
+    await page.setViewportSize({ width: 390, height: mobileHeight })
+    const mobileBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
 
     const label = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
     return {
