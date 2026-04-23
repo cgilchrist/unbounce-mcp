@@ -463,12 +463,17 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
     // Navigate directly to the iframe URL for a clean screenshot (no Unbounce toolbar)
     await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
 
+    // Expand viewport to full scroll height — Unbounce pages use overflow:hidden which blocks fullPage scroll capture
     await page.setViewportSize({ width: 1280, height: 900 })
-    const desktopBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+    const desktopHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0))
+    await page.setViewportSize({ width: 1280, height: desktopHeight })
+    const desktopBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
 
     await page.setViewportSize({ width: 390, height: 844 })
     await page.waitForTimeout(500)
-    const mobileBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+    const mobileHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0))
+    await page.setViewportSize({ width: 390, height: mobileHeight })
+    const mobileBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
 
     const label = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
     return {
