@@ -493,7 +493,9 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
         innerSrcWas: document.getElementById('page-preview-output')?.src || null,
       }
     })
-    return { _type: 'text', text: '```json\n' + JSON.stringify(diag, null, 2) + '\n```' }
+    // Also dump all Playwright frame URLs — src attr may be null if set dynamically
+    const playwrightFrames = page.frames().map(f => ({ name: f.name(), url: f.url() }))
+    return { _type: 'text', text: '```json\n' + JSON.stringify({ diag, playwrightFrames }, null, 2) + '\n```' }
 
     // eslint-disable-next-line no-unreachable
     await page.setViewportSize({ width: 1280, height: 900 })
