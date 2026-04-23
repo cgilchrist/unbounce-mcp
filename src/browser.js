@@ -111,6 +111,15 @@ export async function doHeadedLogin() {
 
   await page.goto(`${UNBOUNCE_APP_BASE}`)
 
+  // Auto-tick "Keep me signed in" so Unbounce issues the long-lived
+  // _lp-webapp_remember_token cookie. Without it, only the short-lived
+  // session cookie is set and the user has to re-login every few hours.
+  // If the checkbox isn't present (SSO redirect, already-authed, etc.),
+  // carry on silently.
+  await page.waitForSelector('#remember-checkbox', { timeout: 5000 })
+    .then(() => page.check('#remember-checkbox'))
+    .catch(() => {})
+
   console.error('[unbounce-mcp] Please log in to Unbounce in the browser window.')
   await page.waitForURL(url => url.href.includes('/pages') || url.href.includes('/dashboard'), { timeout: 300000 })
 
