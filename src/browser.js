@@ -532,9 +532,23 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
     const desktopHeight = await getContentHeight()
     const desktopBuffer = await screenshotAtSize(1280, desktopHeight)
 
+    // DIAGNOSTIC: measure height before and after resizing iframe to 390px
     await page.setViewportSize({ width: 390, height: 844 })
     await page.waitForTimeout(500)
-    const mobileHeight = await getContentHeight()
+    const mobileHeightBeforeResize = await getContentHeight()
+
+    // now resize the iframe to 390px wide and re-measure
+    await page.evaluate(() => {
+      const iframe = document.getElementById('page-preview-output')
+      if (iframe) iframe.style.setProperty('width', '390px', 'important')
+    })
+    await page.waitForTimeout(500)
+    const mobileHeightAfterResize = await getContentHeight()
+
+    return { _type: 'text', text: JSON.stringify({ desktopHeight, mobileHeightBeforeResize, mobileHeightAfterResize }) }
+
+    // eslint-disable-next-line no-unreachable
+    const mobileHeight = mobileHeightAfterResize
     const mobileBuffer = await screenshotAtSize(390, mobileHeight)
 
     const label = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
