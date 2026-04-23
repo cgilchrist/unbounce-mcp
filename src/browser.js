@@ -493,9 +493,21 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
         innerSrcWas: document.getElementById('page-preview-output')?.src || null,
       }
     })
-    // Also dump all Playwright frame URLs — src attr may be null if set dynamically
     const playwrightFrames = page.frames().map(f => ({ name: f.name(), url: f.url() }))
-    return { _type: 'text', text: '```json\n' + JSON.stringify({ diag, playwrightFrames }, null, 2) + '\n```' }
+    // Probe inside the srcdoc frame to confirm the landing page content is there
+    const previewFrame = page.frames().find(f => f.name() === 'page-preview-output')
+    const frameDiag = previewFrame ? await previewFrame.evaluate(() => {
+      const lpPom = document.getElementById('lp-pom-root')
+      return {
+        url: location.href,
+        innerH: window.innerHeight,
+        scrollH: document.documentElement.scrollHeight,
+        lpPomOffsetH: lpPom?.offsetHeight ?? null,
+        lpPomBCR: lpPom ? (() => { const r = lpPom.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) } })() : null,
+        bodyOffsetH: document.body?.offsetHeight ?? null,
+      }
+    }) : 'frame not found'
+    return { _type: 'text', text: '```json\n' + JSON.stringify({ playwrightFrames, frameDiag }, null, 2) + '\n```' }
 
     // eslint-disable-next-line no-unreachable
     await page.setViewportSize({ width: 1280, height: 900 })
