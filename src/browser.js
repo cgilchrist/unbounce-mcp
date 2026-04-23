@@ -463,17 +463,16 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
     // Navigate directly to the iframe URL for a clean screenshot (no Unbounce toolbar)
     await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
 
-    // Expand viewport to full scroll height — Unbounce pages use overflow:hidden which blocks fullPage scroll capture
-    await page.setViewportSize({ width: 1280, height: 900 })
-    const desktopHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0))
-    await page.setViewportSize({ width: 1280, height: desktopHeight })
-    const desktopBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
+    // height:1 is intentional — Unbounce pages use `html, body { height: 100% }` which makes
+    // scrollHeight equal the viewport height. Setting height to 1px collapses those wrapper
+    // elements so the actual content (e.g. #lp-pom-root) drives scrollHeight, letting
+    // fullPage:true capture the entire page rather than just the viewport.
+    await page.setViewportSize({ width: 1280, height: 1 })
+    const desktopBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
 
-    await page.setViewportSize({ width: 390, height: 844 })
+    await page.setViewportSize({ width: 390, height: 1 })
     await page.waitForTimeout(500)
-    const mobileHeight = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.body?.scrollHeight ?? 0))
-    await page.setViewportSize({ width: 390, height: mobileHeight })
-    const mobileBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
+    const mobileBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
 
     const label = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
     return {
