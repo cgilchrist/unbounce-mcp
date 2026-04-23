@@ -460,34 +460,43 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter) {
     const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
     if (!iframeSrc) throw new Error('Preview iframe not found — page may not have loaded')
 
-    // The preview chain has two iframe levels:
-    //   1. preview wrapper → #page-preview iframe → intermediate page
-    //   2. intermediate page → #page-preview-output iframe → actual landing page
-    // Navigate through both to reach the real content.
     await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
     const innerSrc = await page.evaluate(() => document.getElementById('page-preview-output')?.src)
     if (innerSrc) {
       await page.goto(innerSrc, { waitUntil: 'networkidle', timeout: 30000 })
     }
 
-    // scrollHeight is unusable here: Unbounce sets html/body to height:100%, so scrollHeight
-    // equals the viewport height regardless of page content. getBoundingClientRect().bottom
-    // returns each element's actual rendered pixel position — even for elements that overflow
-    // their parent — so scanning all elements gives the true page height.
-    const getFullHeight = () => page.evaluate(() => {
-      let max = window.innerHeight
+    // DIAGNOSTIC — gather every piece of dimension data we can, then return it
+    await page.setViewportSize({ width: 1280, height: 900 })
+    const diag = await page.evaluate(() => {
+      const lpPom = document.getElementById('lp-pom-root')
+      const body = document.body
+      // find the 10 elements with the largest BCR bottom
+      const entries = []
       document.querySelectorAll('*').forEach(el => {
         try {
-          const b = el.getBoundingClientRect().bottom + window.pageYOffset
-          if (b > max) max = b
-        } catch (_) {}
+          const r = el.getBoundingClientRect()
+          entries.push({ tag: el.tagName, id: el.id || undefined, bottom: Math.round(r.bottom + window.pageYOffset), height: Math.round(r.height) })
+        } catch(_) {}
       })
-      return Math.ceil(max)
+      entries.sort((a,b) => b.bottom - a.bottom)
+      return {
+        url: location.href,
+        innerH: window.innerHeight,
+        pageYOffset: window.pageYOffset,
+        docScrollH: document.documentElement.scrollHeight,
+        bodyScrollH: body?.scrollHeight,
+        bodyOffsetH: body?.offsetHeight,
+        lpPomOffsetH: lpPom?.offsetHeight,
+        lpPomBCR: lpPom ? (() => { const r = lpPom.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) } })() : null,
+        deepest10: entries.slice(0, 10),
+        innerSrcWas: document.getElementById('page-preview-output')?.src || null,
+      }
     })
+    return { _type: 'text', text: '```json\n' + JSON.stringify(diag, null, 2) + '\n```' }
 
+    // eslint-disable-next-line no-unreachable
     await page.setViewportSize({ width: 1280, height: 900 })
-    const desktopHeight = await getFullHeight()
-    await page.setViewportSize({ width: 1280, height: desktopHeight })
     const desktopBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
 
     await page.setViewportSize({ width: 390, height: 844 })
