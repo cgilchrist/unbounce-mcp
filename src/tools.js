@@ -669,13 +669,14 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'screenshot_variant',
-    description: 'Take a full-page screenshot of a specific variant and return it as an image. Works for both published and unpublished pages. Use this whenever you need to visually inspect a page\'s design — especially before creating a new variant that should match the look and feel of an existing one. This is the right tool for legacy builder pages where you cannot easily read the design from HTML/CSS alone. Call get_page_variants first to identify the correct variant letter (usually the champion), then call this tool.',
+    description: 'Take a full-page screenshot of a specific variant and return it as an image. Use this whenever you need to visually inspect a page\'s design — especially before creating a new variant that should match the look and feel of an existing one. For published pages, prefer source="published" (faster, no auth required). Use source="preview" (default) for unpublished pages or to see the latest saved changes before publishing.',
     inputSchema: {
       type: 'object',
       properties: {
         sub_account_id: { type: 'string' },
         page_id: { type: 'string', description: 'UUID of the page' },
         variant: { type: 'string', description: 'Variant letter: a, b, c, etc.' },
+        source: { type: 'string', enum: ['preview', 'published'], description: 'Screenshot source. "published" navigates directly to the live {url}/{letter}.html endpoint — faster and more reliable. "preview" (default) uses the Unbounce preview system and works for unpublished pages.' },
       },
       required: ['sub_account_id', 'page_id', 'variant'],
     },
@@ -1013,7 +1014,7 @@ export async function handleTool(name, args) {
     }
 
     case 'screenshot_variant': {
-      return screenshotVariant(args.sub_account_id, args.page_id, args.variant)
+      return screenshotVariant(args.sub_account_id, args.page_id, args.variant, { source: args.source })
     }
 
     case 'get_variant_preview_url': {

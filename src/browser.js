@@ -12,6 +12,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { chromium } from 'playwright'
 import { SESSION_DIR, SESSION_FILE, UNBOUNCE_APP_BASE } from './config.js'
+import { getPage } from './api.js'
 import {
   clearJwtCache,
   directPublish, directUnpublish, directDelete,
@@ -448,76 +449,93 @@ export async function getVariantPreviewUrl(subAccountId, pageId, variantLetter) 
   })
 }
 
-export async function screenshotVariant(subAccountId, pageId, variantLetter) {
+export async function screenshotVariant(subAccountId, pageId, variantLetter, { source = 'preview' } = {}) {
+  const letter = variantLetter.toLowerCase()
+
+  // ── Published mode ──────────────────────────────────────────────────────────
+  // Navigate directly to the public {url}/{letter}.html endpoint. No auth or
+  // iframe unwrapping needed — fullPage:true works on the real page.
+  if (source === 'published') {
+    const { url, name } = await getPage(pageId)
+    const pageUrl = `${url.replace(/\/$/, '')}/${letter}.html`
+    return withPage(async (page) => {
+      await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 30000 })
+      await page.setViewportSize({ width: 1280, height: 900 })
+      const desktopBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.waitForTimeout(500)
+      const mobileBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
+      const label = `Variant ${variantLetter.toUpperCase()} — ${name ?? ''} (published)`.trim()
+      return {
+        _type: 'images',
+        images: [
+          { data: desktopBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (desktop 1280px)` },
+          { data: mobileBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (mobile 390px)` },
+        ],
+      }
+    })
+  }
+
+  // ── Preview mode (default) ──────────────────────────────────────────────────
+  // The Unbounce preview chain wraps the real landing page inside a srcdoc iframe
+  // (#page-preview-output). We can't navigate to it by URL, so we measure height
+  // from inside the frame via Playwright's frame API, resize the iframe element to
+  // that height, then screenshot the outer page at full height.
   return withPage(async (page) => {
     const { variants } = await directGetPageVariants(page, pageId)
-    const variant = variants.find(v => v.variant === variantLetter.toLowerCase())
+    const variant = variants.find(v => v.variant === letter)
     if (!variant) throw new Error(`Variant "${variantLetter}" not found on page ${pageId}`)
     if (!variant.preview_path) throw new Error(`No preview path available for variant ${variantLetter}`)
 
-    // Navigate to the preview wrapper page to obtain the authenticated iframe URL
     await page.goto(`${UNBOUNCE_APP_BASE}${variant.preview_path}`, { waitUntil: 'networkidle', timeout: 30000 })
     const iframeSrc = await page.evaluate(() => document.getElementById('page-preview')?.src)
     if (!iframeSrc) throw new Error('Preview iframe not found — page may not have loaded')
 
     await page.goto(iframeSrc, { waitUntil: 'networkidle', timeout: 30000 })
-    const innerSrc = await page.evaluate(() => document.getElementById('page-preview-output')?.src)
-    if (innerSrc) {
-      await page.goto(innerSrc, { waitUntil: 'networkidle', timeout: 30000 })
+
+    const getContentHeight = async () => {
+      const frame = page.frames().find(f => f.name() === 'page-preview-output')
+      if (frame) {
+        return await frame.evaluate(() => Math.max(
+          document.documentElement.scrollHeight,
+          document.getElementById('lp-pom-root')?.offsetHeight ?? 0,
+          document.body?.scrollHeight ?? 0
+        ))
+      }
+      return await page.evaluate(() => {
+        let max = window.innerHeight
+        document.querySelectorAll('*').forEach(el => {
+          try { const b = el.getBoundingClientRect().bottom + window.pageYOffset; if (b > max) max = b } catch (_) {}
+        })
+        return Math.ceil(max)
+      })
     }
 
-    // DIAGNOSTIC — gather every piece of dimension data we can, then return it
-    await page.setViewportSize({ width: 1280, height: 900 })
-    const diag = await page.evaluate(() => {
-      const lpPom = document.getElementById('lp-pom-root')
-      const body = document.body
-      // find the 10 elements with the largest BCR bottom
-      const entries = []
-      document.querySelectorAll('*').forEach(el => {
-        try {
-          const r = el.getBoundingClientRect()
-          entries.push({ tag: el.tagName, id: el.id || undefined, bottom: Math.round(r.bottom + window.pageYOffset), height: Math.round(r.height) })
-        } catch(_) {}
-      })
-      entries.sort((a,b) => b.bottom - a.bottom)
-      return {
-        url: location.href,
-        innerH: window.innerHeight,
-        pageYOffset: window.pageYOffset,
-        docScrollH: document.documentElement.scrollHeight,
-        bodyScrollH: body?.scrollHeight,
-        bodyOffsetH: body?.offsetHeight,
-        lpPomOffsetH: lpPom?.offsetHeight,
-        lpPomBCR: lpPom ? (() => { const r = lpPom.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) } })() : null,
-        deepest10: entries.slice(0, 10),
-        innerSrcWas: document.getElementById('page-preview-output')?.src || null,
-      }
-    })
-    const playwrightFrames = page.frames().map(f => ({ name: f.name(), url: f.url() }))
-    // Probe inside the srcdoc frame to confirm the landing page content is there
-    const previewFrame = page.frames().find(f => f.name() === 'page-preview-output')
-    const frameDiag = previewFrame ? await previewFrame.evaluate(() => {
-      const lpPom = document.getElementById('lp-pom-root')
-      return {
-        url: location.href,
-        innerH: window.innerHeight,
-        scrollH: document.documentElement.scrollHeight,
-        lpPomOffsetH: lpPom?.offsetHeight ?? null,
-        lpPomBCR: lpPom ? (() => { const r = lpPom.getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom) } })() : null,
-        bodyOffsetH: document.body?.offsetHeight ?? null,
-      }
-    }) : 'frame not found'
-    return { _type: 'text', text: '```json\n' + JSON.stringify({ playwrightFrames, frameDiag }, null, 2) + '\n```' }
+    const screenshotAtSize = async (width, height) => {
+      await page.evaluate(([w, h]) => {
+        const iframe = document.getElementById('page-preview-output')
+        if (iframe) {
+          iframe.style.setProperty('width', w + 'px', 'important')
+          iframe.style.setProperty('height', h + 'px', 'important')
+          iframe.style.setProperty('border', 'none', 'important')
+          iframe.style.setProperty('display', 'block', 'important')
+        }
+        document.documentElement.style.cssText = 'margin:0;padding:0;'
+        document.body.style.cssText = 'margin:0;padding:0;'
+      }, [width, height])
+      await page.setViewportSize({ width, height })
+      await page.waitForTimeout(200)
+      return page.screenshot({ type: 'jpeg', quality: 80 })
+    }
 
-    // eslint-disable-next-line no-unreachable
     await page.setViewportSize({ width: 1280, height: 900 })
-    const desktopBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
+    const desktopHeight = await getContentHeight()
+    const desktopBuffer = await screenshotAtSize(1280, desktopHeight)
 
     await page.setViewportSize({ width: 390, height: 844 })
     await page.waitForTimeout(500)
-    const mobileHeight = await getFullHeight()
-    await page.setViewportSize({ width: 390, height: mobileHeight })
-    const mobileBuffer = await page.screenshot({ type: 'jpeg', quality: 80 })
+    const mobileHeight = await getContentHeight()
+    const mobileBuffer = await screenshotAtSize(390, mobileHeight)
 
     const label = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
     return {
