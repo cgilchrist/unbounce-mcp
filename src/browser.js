@@ -89,8 +89,8 @@ async function getBrowser() {
 }
 
 /** Create a new page with session cookies loaded */
-async function newAuthPage(browser) {
-  const context = await browser.newContext()
+async function newAuthPage(browser, contextOptions = {}) {
+  const context = await browser.newContext(contextOptions)
   if (_session?.cookies) {
     await context.addCookies(_session.cookies)
   }
@@ -144,10 +144,10 @@ export async function ensureSession() {
  * mid-tool-call (which races against MCP timeouts and causes login loops).
  * Use the reauthenticate tool to log in explicitly when needed.
  */
-async function withPage(fn) {
+async function withPage(fn, contextOptions = {}) {
   await ensureSession()
   const browser = await getBrowser()
-  const page = await newAuthPage(browser)
+  const page = await newAuthPage(browser, contextOptions)
 
   if (process.env.UNBOUNCE_DEBUG_NETWORK) {
     const logFile = process.env.UNBOUNCE_DEBUG_NETWORK
@@ -473,7 +473,7 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
           { data: mobileBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (mobile 390px)` },
         ],
       }
-    })
+    }, { deviceScaleFactor: 2 })
   }
 
   // ── Preview mode (default) ──────────────────────────────────────────────────
@@ -547,7 +547,7 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
         { data: mobileBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (mobile 390px)` },
       ],
     }
-  })
+  }, { deviceScaleFactor: 2 })
 }
 
 // ── Duplicate page ─────────────────────────────────────────────────────────────
