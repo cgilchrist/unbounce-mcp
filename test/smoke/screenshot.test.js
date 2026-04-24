@@ -49,6 +49,7 @@ test('screenshot_variant returns an image for preview and published', { timeout:
     pageId = deploy.page_id
     assert.ok(pageId, 'deploy should return page_id')
     assert.ok(deploy.url, 'publish should return live url')
+    console.error(`[smoke] created page ${pageId} (will clean up in finally)`)
 
     const previewShot = await client.call('screenshot_variant', {
       sub_account_id: env.UNBOUNCE_SANDBOX_SUB_ACCOUNT_ID,
@@ -79,6 +80,7 @@ test('screenshot_variant returns an image for preview and published', { timeout:
         })
       } catch (err) {
         console.error(`CLEANUP FAILED for page ${pageId}: ${err.message}`)
+        console.error(`To delete manually: npm run clean-sandbox -- --yes`)
       }
     }
     await client.close()

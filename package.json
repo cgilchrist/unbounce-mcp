@@ -12,7 +12,8 @@
     "test:unit": "node --test test/unit/*.test.js",
     "test:smoke": "node --test --test-concurrency=1 test/smoke/*.test.js",
     "mcp": "node test/run.js",
-    "login": "node test/harness/login.js"
+    "login": "node test/harness/login.js",
+    "clean-sandbox": "node test/harness/clean-sandbox.js"
   },
   "files": [
     "index.js",

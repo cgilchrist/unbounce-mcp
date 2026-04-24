@@ -268,6 +268,17 @@ The runner fills in `sub_account_id` from `UNBOUNCE_SANDBOX_SUB_ACCOUNT_ID` when
 npm test
 ```
 
+### Cleaning up orphaned sandbox pages
+
+If a smoke test ever fails mid-flight and its `finally` cleanup doesn't complete, the created page is left in the sandbox. Every smoke test logs `[smoke] created page <id>` right after deploy, so the id is always traceable. To clean them up in bulk:
+
+```bash
+npm run clean-sandbox           # dry-run — lists all smoke-* pages
+npm run clean-sandbox -- --yes  # actually delete them
+```
+
+Only pages whose name starts with `smoke-` are touched.
+
 ### Contributing notes
 
 - **`console.log` is forbidden** in `src/`. `stdout` is the MCP transport — a stray `console.log` corrupts JSON-RPC frames. Always use `console.error` for debug output; the harness streams stderr live with an `[mcp]` prefix.

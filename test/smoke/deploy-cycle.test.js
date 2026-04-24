@@ -44,6 +44,7 @@ test('deploy → get_variant → edit_variant → get_variant → delete_page', 
     const deploy = parseToolResult(deployRaw)
     assert.equal(typeof deploy.page_id, 'string', 'deploy should return page_id')
     pageId = deploy.page_id
+    console.error(`[smoke] created page ${pageId} (will clean up in finally)`)
 
     const variantRaw = await client.call('get_variant', {
       sub_account_id: env.UNBOUNCE_SANDBOX_SUB_ACCOUNT_ID,
@@ -77,6 +78,7 @@ test('deploy → get_variant → edit_variant → get_variant → delete_page', 
         })
       } catch (err) {
         console.error(`CLEANUP FAILED for page ${pageId}: ${err.message}`)
+        console.error(`To delete manually: npm run clean-sandbox -- --yes`)
       }
     }
     await client.close()
