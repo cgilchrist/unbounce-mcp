@@ -13,6 +13,7 @@ import * as path from 'path'
 import { chromium } from 'playwright'
 import { SESSION_DIR, SESSION_FILE, UNBOUNCE_APP_BASE } from './config.js'
 import { getPage } from './api.js'
+import { computeTiles } from './screenshot-tiles.js'
 import {
   clearJwtCache,
   directPublish, directUnpublish, directDelete,
@@ -374,38 +375,77 @@ export async function getVariantPreviewUrl(subAccountId, pageId, variantLetter) 
   })
 }
 
+const JPEG_QUALITY = 85
+const DSR = 2 // deviceScaleFactor — renders at 2x for retina sharpness
+
+/**
+ * Scroll to each tile y-offset and capture that viewport slice as JPEG.
+ * Avoids Playwright's fullPage:true + post-hoc slicing so we don't need
+ * an image-processing dependency. Each tile ends up well under 1 MB
+ * base64 at quality 85 and DSR 2.
+ */
+async function captureTilesAtViewport(page, width, totalHeight) {
+  const tiles = computeTiles(totalHeight)
+  const buffers = []
+  for (const tile of tiles) {
+    await page.setViewportSize({ width, height: tile.height })
+    await page.evaluate(y => window.scrollTo(0, y), tile.y)
+    await page.waitForTimeout(200)
+    const buf = await page.screenshot({ type: 'jpeg', quality: JPEG_QUALITY })
+    buffers.push({ buffer: buf, tile })
+  }
+  return buffers
+}
+
+function tileImages(buffers, labelBase, width) {
+  const total = buffers.length
+  return buffers.map(({ buffer, tile }, i) => ({
+    data: buffer.toString('base64'),
+    mimeType: 'image/jpeg',
+    caption: total === 1
+      ? `${labelBase} (${width}px wide)`
+      : `${labelBase} (${width}px wide, tile ${i + 1}/${total}, y ${tile.y}–${tile.y + tile.height})`,
+  }))
+}
+
 export async function screenshotVariant(subAccountId, pageId, variantLetter, { source = 'preview' } = {}) {
   const letter = variantLetter.toLowerCase()
 
   // ── Published mode ──────────────────────────────────────────────────────────
   // Navigate directly to the public {url}/{letter}.html endpoint. No auth or
-  // iframe unwrapping needed — fullPage:true works on the real page.
+  // iframe unwrapping needed — we scroll through the page ourselves, one tile
+  // at a time, to keep each JPEG comfortably under the 1 MB MCP result limit.
   if (source === 'published') {
     const { url, name } = await getPage(pageId)
     const pageUrl = `${url.replace(/\/$/, '')}/${letter}.html`
     return withPage(async (page) => {
       await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 30000 })
-      await page.setViewportSize({ width: 1280, height: 900 })
-      const desktopBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
-      await page.setViewportSize({ width: 390, height: 844 })
-      await page.waitForTimeout(500)
-      const mobileBuffer = await page.screenshot({ fullPage: true, type: 'jpeg', quality: 80 })
-      const label = `Variant ${variantLetter.toUpperCase()} — ${name ?? ''} (published)`.trim()
+
+      const captureAtWidth = async (width) => {
+        await page.setViewportSize({ width, height: 900 })
+        await page.waitForTimeout(300)
+        const totalHeight = await page.evaluate(() => document.documentElement.scrollHeight)
+        return captureTilesAtViewport(page, width, totalHeight)
+      }
+
+      const desktopTiles = await captureAtWidth(1280)
+      const mobileTiles = await captureAtWidth(390)
+
+      const labelBase = `Variant ${variantLetter.toUpperCase()} — ${name ?? ''} (published)`.trim()
       return {
         _type: 'images',
         images: [
-          { data: desktopBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (desktop 1280px)` },
-          { data: mobileBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (mobile 390px)` },
+          ...tileImages(desktopTiles, `${labelBase} desktop`, 1280),
+          ...tileImages(mobileTiles, `${labelBase} mobile`, 390),
         ],
       }
-    })
+    }, { deviceScaleFactor: DSR })
   }
 
   // ── Preview mode (default) ──────────────────────────────────────────────────
   // The Unbounce preview chain wraps the real landing page inside a srcdoc iframe
-  // (#page-preview-output). We can't navigate to it by URL, so we measure height
-  // from inside the frame via Playwright's frame API, resize the iframe element to
-  // that height, then screenshot the outer page at full height.
+  // (#page-preview-output). We stretch the iframe to its content height on the
+  // outer page, then scroll the outer page between tile captures.
   return withPage(async (page) => {
     const { variants } = await directGetPageVariants(page, pageId)
     const variant = variants.find(v => v.variant === letter)
@@ -436,8 +476,9 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
       })
     }
 
-    // Resize iframe to target width first, wait for reflow, measure height, then screenshot.
-    // Order matters: measuring before resize returns the previous width's height (proven by diagnostic).
+    // Resize iframe to target width, wait for reflow, measure height, stretch
+    // iframe element to that height, then scroll-and-capture tile by tile.
+    // Order matters: measuring before resize returns the previous width's height.
     const captureAtWidth = async (width) => {
       await page.setViewportSize({ width, height: 900 })
       await page.evaluate((w) => {
@@ -456,23 +497,21 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
         const iframe = document.getElementById('page-preview-output')
         if (iframe) iframe.style.setProperty('height', h + 'px', 'important')
       }, height)
-      await page.setViewportSize({ width, height })
-      await page.waitForTimeout(200)
-      return page.screenshot({ type: 'jpeg', quality: 80 })
+      return captureTilesAtViewport(page, width, height)
     }
 
-    const desktopBuffer = await captureAtWidth(1280)
-    const mobileBuffer = await captureAtWidth(390)
+    const desktopTiles = await captureAtWidth(1280)
+    const mobileTiles = await captureAtWidth(390)
 
-    const label = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
+    const labelBase = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
     return {
       _type: 'images',
       images: [
-        { data: desktopBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (desktop 1280px)` },
-        { data: mobileBuffer.toString('base64'), mimeType: 'image/jpeg', caption: `${label} (mobile 390px)` },
+        ...tileImages(desktopTiles, `${labelBase} desktop`, 1280),
+        ...tileImages(mobileTiles, `${labelBase} mobile`, 390),
       ],
     }
-  })
+  }, { deviceScaleFactor: DSR })
 }
 
 // ── Duplicate page ─────────────────────────────────────────────────────────────

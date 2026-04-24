@@ -23,8 +23,24 @@ function parseToolResult(result) {
   try { return JSON.parse(textPart.text) } catch { return textPart.text }
 }
 
-function extractImage(result) {
-  return result.content?.find(c => c.type === 'image')
+function extractImages(result) {
+  return (result.content ?? []).filter(c => c.type === 'image')
+}
+
+// MCP tool result limit is 1 MB. Base64 inflates 33%, so each tile's binary
+// size must stay under ~750 KB to be safe in aggregate. Enforce per tile
+// because the limit applies to the whole tool response, not individual parts.
+const TILE_BYTE_LIMIT = 900 * 1024
+
+function assertTilesFitLimit(images, label) {
+  assert.ok(images.length > 0, `${label} returned no image parts`)
+  for (let i = 0; i < images.length; i++) {
+    const binBytes = Math.floor(images[i].data.length * 3 / 4)
+    assert.ok(
+      binBytes < TILE_BYTE_LIMIT,
+      `${label} tile ${i + 1}/${images.length} is ${binBytes} bytes — above ${TILE_BYTE_LIMIT}`
+    )
+  }
 }
 
 test('screenshot_variant returns an image for preview and published', { timeout: 240000 }, async () => {
@@ -57,9 +73,7 @@ test('screenshot_variant returns an image for preview and published', { timeout:
       variant: 'a',
       source: 'preview',
     })
-    const previewImg = extractImage(previewShot)
-    assert.ok(previewImg, 'preview screenshot should return an image part')
-    assert.ok(previewImg.data.length > 1000, 'preview screenshot should be more than 1KB')
+    assertTilesFitLimit(extractImages(previewShot), 'preview')
 
     const publishedShot = await client.call('screenshot_variant', {
       sub_account_id: env.UNBOUNCE_SANDBOX_SUB_ACCOUNT_ID,
@@ -67,9 +81,7 @@ test('screenshot_variant returns an image for preview and published', { timeout:
       variant: 'a',
       source: 'published',
     })
-    const publishedImg = extractImage(publishedShot)
-    assert.ok(publishedImg, 'published screenshot should return an image part')
-    assert.ok(publishedImg.data.length > 1000, 'published screenshot should be more than 1KB')
+    assertTilesFitLimit(extractImages(publishedShot), 'published')
   } finally {
     if (pageId) {
       try {
