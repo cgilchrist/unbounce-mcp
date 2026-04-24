@@ -219,3 +219,56 @@ Your MCP-compatible client will ask for anything it needs (account, domain, slug
 - After uploading, Unbounce sends a confirmation email to your Unbounce account email — this is expected and not an error
 - Variant weights must be integers summing to 100 (e.g. 3 variants → 34/33/33)
 - If your session expires, a browser window will open to re-authenticate
+
+## Development
+
+The repo ships with a local test harness so changes can be developed and verified without restarting any MCP client. See `docs/superpowers/specs/2026-04-23-test-harness-design.md` for the full design.
+
+### One-time sandbox setup
+
+1. Create a **sandbox Unbounce client** with its own API key.
+2. Create a **dedicated test user** in Unbounce and invite them *only* to the sandbox client.
+3. Copy `.env.test.example` to `.env.test` and fill in the sandbox API key, session file path, and sub-account ID.
+4. Run the one-time headed login — log in as the **test user**, not your personal account:
+   ```bash
+   npm run login
+   ```
+   Cookies save to the path configured in `UNBOUNCE_MCP_SESSION_FILE`.
+
+### Unit tests
+
+Pure-logic tests. No network, no browser, runs in ~1 second.
+
+```bash
+npm run test:unit
+```
+
+### Smoke tests
+
+End-to-end scenarios against the sandbox. Each test creates a page, exercises the tools, and deletes the page in a `finally` block.
+
+```bash
+npm run test:smoke
+```
+
+### Interactive runner
+
+Invoke any tool against the sandbox with live stderr visible:
+
+```bash
+npm run mcp -- list_pages '{}'
+npm run mcp -- screenshot_variant '{"page_id":"xyz","variant":"a"}'
+```
+
+The runner fills in `sub_account_id` from `UNBOUNCE_SANDBOX_SUB_ACCOUNT_ID` when omitted from the args. Each run saves its stderr log and any returned images under `.test-runs/<timestamp>-<tool>/`.
+
+### Full suite
+
+```bash
+npm test
+```
+
+### Contributing notes
+
+- **`console.log` is forbidden** in `src/`. `stdout` is the MCP transport — a stray `console.log` corrupts JSON-RPC frames. Always use `console.error` for debug output; the harness streams stderr live with an `[mcp]` prefix.
+- Unit tests use Node 18+'s built-in `node:test`. No Jest / Vitest dependency.
