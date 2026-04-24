@@ -27,20 +27,57 @@ function extractImages(result) {
   return (result.content ?? []).filter(c => c.type === 'image')
 }
 
-// MCP clients cap the FULL tool response at 1 MB. Base64 inflates 33%, plus
-// JSON framing and captions — a ~750 KB binary payload encodes to ~1 MB
-// serialized. Assert total binary stays below that ceiling so the response
-// actually gets accepted by the client.
+// Two independent constraints the response MUST satisfy:
+//   1. MCP response: 1 MB cap → ~750 KB binary after base64 + framing.
+//   2. Per-image dimensions: Anthropic vision caps each image at 8000 px
+//      on any side. We use 7500 in the server for headroom; the test
+//      allows up to 8000 as the hard ceiling clients actually enforce.
 const TOTAL_RESPONSE_BUDGET = 750 * 1024
+const MAX_IMAGE_DIMENSION = 8000
 
 function assertResponseFitsLimit(result, label) {
   const images = extractImages(result)
   assert.ok(images.length > 0, `${label} returned no image parts`)
+
   const totalBin = images.reduce((s, img) => s + Math.floor(img.data.length * 3 / 4), 0)
   assert.ok(
     totalBin < TOTAL_RESPONSE_BUDGET,
     `${label} total response ${totalBin} bytes exceeds ${TOTAL_RESPONSE_BUDGET} budget across ${images.length} image part(s)`
   )
+
+  for (let i = 0; i < images.length; i++) {
+    const { width, height } = readJpegDimensions(images[i].data)
+    assert.ok(
+      width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION,
+      `${label} image ${i + 1}/${images.length} is ${width}×${height}, exceeds ${MAX_IMAGE_DIMENSION}px cap`
+    )
+  }
+}
+
+// Decode JPEG SOF marker to get dimensions without pulling in an image lib.
+// JPEG files: FF D8 [segments] ... SOFn (FF C0-C3, C5-C7, C9-CB, CD-CF) where
+// height and width appear at byte offsets 5 and 7 within the segment payload.
+function readJpegDimensions(base64) {
+  const buf = Buffer.from(base64, 'base64')
+  let i = 2 // skip SOI
+  while (i < buf.length) {
+    if (buf[i] !== 0xFF) throw new Error('invalid JPEG marker')
+    while (buf[i] === 0xFF) i++
+    const marker = buf[i++]
+    // SOFn markers that actually carry dimensions
+    const isSof = (marker >= 0xC0 && marker <= 0xC3) ||
+                  (marker >= 0xC5 && marker <= 0xC7) ||
+                  (marker >= 0xC9 && marker <= 0xCB) ||
+                  (marker >= 0xCD && marker <= 0xCF)
+    const segLen = (buf[i] << 8) | buf[i + 1]
+    if (isSof) {
+      const height = (buf[i + 3] << 8) | buf[i + 4]
+      const width = (buf[i + 5] << 8) | buf[i + 6]
+      return { width, height }
+    }
+    i += segLen
+  }
+  throw new Error('no SOF marker found in JPEG')
 }
 
 test('screenshot_variant returns an image for preview and published', { timeout: 240000 }, async () => {

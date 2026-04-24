@@ -13,7 +13,13 @@ import * as path from 'path'
 import { chromium } from 'playwright'
 import { SESSION_DIR, SESSION_FILE, UNBOUNCE_APP_BASE } from './config.js'
 import { getPage } from './api.js'
-import { JPEG_TIERS, pickTier } from './screenshot-quality.js'
+import {
+  JPEG_TIERS,
+  MAX_OUTPUT_DIMENSION,
+  pickTier,
+  tierFitsDimensions,
+  computeTiles,
+} from './screenshot-quality.js'
 import {
   clearJwtCache,
   directPublish, directUnpublish, directDelete,
@@ -393,35 +399,79 @@ const TOTAL_BUDGET = 700 * 1024
 const MOBILE_MIN_BUDGET = 150 * 1024
 
 /**
- * Capture a single screenshot at the highest JPEG quality / scale whose
- * encoded output stays under `budget`. Estimates bytes up front; if the
- * actual buffer exceeds the budget we step down one tier and retry until
- * it fits or we hit the floor.
+ * Capture at the highest JPEG tier whose estimated output fits both the
+ * byte budget and the per-image dimension cap. Falls back a tier if the
+ * actual buffer exceeds budget, and skips tiers whose output would exceed
+ * MAX_OUTPUT_DIMENSION (e.g. 2x on a 4000-px-tall page → 8000 output).
  */
 async function captureWithBudget(page, cssWidth, cssHeight, budget) {
   const predicted = pickTier(cssWidth, cssHeight, budget)
+  if (!predicted) {
+    throw new Error(
+      `Page ${cssWidth}×${cssHeight} exceeds ${MAX_OUTPUT_DIMENSION}px output cap even at 1x. Caller must tile before invoking captureWithBudget.`
+    )
+  }
   const startIdx = JPEG_TIERS.indexOf(predicted)
   for (let i = startIdx; i < JPEG_TIERS.length; i++) {
     const tier = JPEG_TIERS[i]
+    if (!tierFitsDimensions(cssWidth, cssHeight, tier)) continue
     const buf = await page.screenshot({
       type: 'jpeg',
       quality: tier.quality,
       scale: tier.dsr === 2 ? 'device' : 'css',
     })
-    const last = i === JPEG_TIERS.length - 1
-    if (buf.length <= budget || last) {
+    const isLastDimFit = JPEG_TIERS.slice(i + 1).every(t => !tierFitsDimensions(cssWidth, cssHeight, t))
+    if (buf.length <= budget || isLastDimFit) {
       return { buffer: buf, tier }
     }
   }
 }
 
-function imagePart({ buffer, tier }, labelBase, width) {
+function imagePart({ buffer, tier }, labelBase, width, tileLabel = '') {
   const kb = Math.round(buffer.length / 1024)
+  const prefix = tileLabel ? ` ${tileLabel}` : ''
   return {
     data: buffer.toString('base64'),
     mimeType: 'image/jpeg',
-    caption: `${labelBase} (${width}px wide, ${tier.dsr}x, q=${tier.quality}, ${kb} KB)`,
+    caption: `${labelBase}${prefix} (${width}px wide, ${tier.dsr}x, q=${tier.quality}, ${kb} KB)`,
   }
+}
+
+/**
+ * Capture one viewport as one or more tiles so every resulting image fits
+ * under MAX_OUTPUT_DIMENSION on each side, and the total binary footprint
+ * fits `budget` bytes. Short pages produce a single image; tall ones are
+ * split into vertical slices at 1x.
+ *
+ * `scrollSetup(tile)` is invoked before each capture to position content
+ * (e.g. iframe scroll, outer-page scroll) at that tile's y offset.
+ *
+ * Returns an array of { buffer, tier, tile } objects.
+ */
+async function captureViewportTiled(page, cssWidth, cssHeight, budget, scrollSetup) {
+  const tiles = computeTiles(cssHeight)
+  const perTileBudget = Math.floor(budget / tiles.length)
+  const results = []
+  for (const tile of tiles) {
+    await scrollSetup(tile)
+    await page.setViewportSize({ width: cssWidth, height: tile.height })
+    await page.waitForTimeout(200)
+    const shot = await captureWithBudget(page, cssWidth, tile.height, perTileBudget)
+    results.push({ ...shot, tile })
+  }
+  return results
+}
+
+function tileImageParts(captures, labelBase, width) {
+  const total = captures.length
+  return captures.map((c, i) => {
+    const tileLabel = total === 1 ? '' : `tile ${i + 1}/${total} (y ${c.tile.y}–${c.tile.y + c.tile.height})`
+    return imagePart(c, labelBase, width, tileLabel)
+  })
+}
+
+function totalBytes(captures) {
+  return captures.reduce((s, c) => s + c.buffer.length, 0)
 }
 
 
@@ -442,23 +492,20 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
         await page.setViewportSize({ width, height: 900 })
         await page.waitForTimeout(300)
         const totalHeight = await page.evaluate(() => document.documentElement.scrollHeight)
-        await page.setViewportSize({ width, height: totalHeight })
-        await page.waitForTimeout(200)
-        return captureWithBudget(page, width, totalHeight, budget)
+        return captureViewportTiled(page, width, totalHeight, budget, async (tile) => {
+          await page.evaluate(y => window.scrollTo(0, y), tile.y)
+        })
       }
 
-      const desktopShot = await captureAtWidth(1280, TOTAL_BUDGET)
+      const desktopCaps = await captureAtWidth(1280, TOTAL_BUDGET)
       const labelBase = `Variant ${variantLetter.toUpperCase()} — ${name ?? ''} (published)`.trim()
-      const images = [imagePart(desktopShot, `${labelBase} desktop`, 1280)]
+      const images = [...tileImageParts(desktopCaps, `${labelBase} desktop`, 1280)]
 
-      const remaining = TOTAL_BUDGET - desktopShot.buffer.length
+      const remaining = TOTAL_BUDGET - totalBytes(desktopCaps)
       if (remaining >= MOBILE_MIN_BUDGET) {
-        const mobileShot = await captureAtWidth(390, remaining)
-        // Include mobile only if it ACTUALLY fits — even the floor tier
-        // can exceed estimate on photo-dense pages. Better to drop than
-        // return over-budget and get the whole response rejected.
-        if (mobileShot.buffer.length <= remaining) {
-          images.push(imagePart(mobileShot, `${labelBase} mobile`, 390))
+        const mobileCaps = await captureAtWidth(390, remaining)
+        if (totalBytes(mobileCaps) <= remaining) {
+          images.push(...tileImageParts(mobileCaps, `${labelBase} mobile`, 390))
         }
       }
 
@@ -501,8 +548,9 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
     }
 
     // Resize iframe to target width, wait for reflow, measure height, stretch
-    // iframe element to that height, set viewport to match, then capture.
-    // Order matters: measuring before resize returns the previous width's height.
+    // iframe element to that height, then capture (tiling if taller than
+    // the dimension cap). Order matters: measuring before resize returns
+    // the previous width's height.
     const captureAtWidth = async (width, budget) => {
       await page.setViewportSize({ width, height: 900 })
       await page.evaluate((w) => {
@@ -521,22 +569,20 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
         const iframe = document.getElementById('page-preview-output')
         if (iframe) iframe.style.setProperty('height', h + 'px', 'important')
       }, height)
-      await page.setViewportSize({ width, height })
-      await page.waitForTimeout(200)
-      return captureWithBudget(page, width, height, budget)
+      return captureViewportTiled(page, width, height, budget, async (tile) => {
+        await page.evaluate(y => window.scrollTo(0, y), tile.y)
+      })
     }
 
-    const desktopShot = await captureAtWidth(1280, TOTAL_BUDGET)
+    const desktopCaps = await captureAtWidth(1280, TOTAL_BUDGET)
     const labelBase = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
-    const images = [imagePart(desktopShot, `${labelBase} desktop`, 1280)]
+    const images = [...tileImageParts(desktopCaps, `${labelBase} desktop`, 1280)]
 
-    const remaining = TOTAL_BUDGET - desktopShot.buffer.length
+    const remaining = TOTAL_BUDGET - totalBytes(desktopCaps)
     if (remaining >= MOBILE_MIN_BUDGET) {
-      const mobileShot = await captureAtWidth(390, remaining)
-      // Drop mobile if even floor-tier capture exceeds remaining budget,
-      // rather than returning over-budget and getting rejected by MCP.
-      if (mobileShot.buffer.length <= remaining) {
-        images.push(imagePart(mobileShot, `${labelBase} mobile`, 390))
+      const mobileCaps = await captureAtWidth(390, remaining)
+      if (totalBytes(mobileCaps) <= remaining) {
+        images.push(...tileImageParts(mobileCaps, `${labelBase} mobile`, 390))
       }
     }
 
