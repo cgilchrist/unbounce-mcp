@@ -3,3 +3,5 @@ node_modules/
 *.session.json
 ~/.unbounce-mcp/
 /tmp/
+.env.test
+.test-runs/
