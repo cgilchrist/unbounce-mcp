@@ -10,7 +10,7 @@
     "start": "node index.js",
     "test": "npm run test:unit && npm run test:smoke",
     "test:unit": "node --test test/unit/*.test.js",
-    "test:smoke": "node --test test/smoke/*.test.js",
+    "test:smoke": "node --test --test-concurrency=1 test/smoke/*.test.js",
     "mcp": "node test/run.js",
     "login": "node test/harness/login.js"
   },
