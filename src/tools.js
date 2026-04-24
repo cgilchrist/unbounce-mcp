@@ -24,7 +24,7 @@ import {
 } from './browser.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
-function evenWeights(variantIds) {
+export function evenWeights(variantIds) {
   const n = variantIds.length
   const base = Math.floor(100 / n)
   const remainder = 100 - base * n
@@ -36,7 +36,7 @@ function evenWeights(variantIds) {
 }
 
 /** Slugify a page name into a URL-safe path segment */
-function slugify(name) {
+export function slugify(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'page'
 }
 
