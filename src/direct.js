@@ -91,6 +91,22 @@ async function getCsrf(page) {
 }
 
 /**
+ * Get a CSRF token, navigating to APP_BASE if the current page has none.
+ * withPage() gives us fresh about:blank pages; when the JWT cache is warm
+ * getJwt() won't navigate for us, so CSRF-dependent calls need this helper
+ * to ensure a meta tag is reachable.
+ */
+async function ensureCsrf(page) {
+  let csrf = await getCsrf(page)
+  if (!csrf) {
+    await page.goto(APP_BASE, { waitUntil: 'domcontentloaded', timeout: 15000 })
+    csrf = await getCsrf(page)
+  }
+  if (!csrf) throw new Error('No CSRF token found')
+  return csrf
+}
+
+/**
  * POST a Rails-style form action using Playwright's request context.
  */
 async function railsPost(page, url, body, extraHeaders = {}) {
@@ -106,8 +122,7 @@ async function railsPost(page, url, body, extraHeaders = {}) {
 // ── Publish ────────────────────────────────────────────────────────────────────
 
 export async function directPublish(page, subAccountId, pageId) {
-  const csrf = await getCsrf(page)
-  if (!csrf) throw new Error('No CSRF token found')
+  const csrf = await ensureCsrf(page)
   const url = `${APP_BASE}/${subAccountId}/pages/${pageId}/publish`
   await railsPost(page, url, `authenticity_token=${encodeURIComponent(csrf)}&_method=put`)
 }
@@ -115,8 +130,7 @@ export async function directPublish(page, subAccountId, pageId) {
 // ── Unpublish ──────────────────────────────────────────────────────────────────
 
 export async function directUnpublish(page, subAccountId, pageId) {
-  const csrf = await getCsrf(page)
-  if (!csrf) throw new Error('No CSRF token found')
+  const csrf = await ensureCsrf(page)
   const url = `${APP_BASE}/${subAccountId}/pages/${pageId}/unpublish`
   await railsPost(page, url, `authenticity_token=${encodeURIComponent(csrf)}`)
 }
@@ -511,7 +525,7 @@ export async function directEditVariant(page, numericId, newHtml, newCss, varian
   raw.elements = JSON.stringify(elements)
 
   // 3. POST save.xml — must include both mainPage and subPages
-  const csrf = await getCsrf(page)
+  const csrf = await ensureCsrf(page)
   const xml = buildSaveXml(fullResponse)
   const req = page.context().request
   const saveRes = await req.post(`${APP_BASE}/variants/${numericId}/save.xml`, {
@@ -732,7 +746,7 @@ export async function directInitBlankSlate(page, numericId, html, css, variantLe
 
   raw.elements = JSON.stringify(blankElements(resolvedHtml, resolvedCss))
 
-  const csrf = await getCsrf(page)
+  const csrf = await ensureCsrf(page)
   const xml = buildSaveXml(fullResponse)
   const req = page.context().request
   const saveRes = await req.post(`${APP_BASE}/variants/${numericId}/save.xml`, {

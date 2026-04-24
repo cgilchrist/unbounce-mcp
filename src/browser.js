@@ -18,7 +18,7 @@ import {
   directPublish, directUnpublish, directDelete,
   directSetVariantWeights, directSetTrafficMode, directSetPageUrl,
   directGetVariant, directEditVariant, directGetVariantNumericIds,
-  directRenameVariant, directCreateVariantFromScratch, directInitBlankSlate,
+  directRenameVariant, directCreateVariantFromScratch,
   directFetchDuplicationOptions, directDuplicatePage,
   directSearchPages, directGetPageInsights, directGetPageStats,
   directGetBulkPageStats, directGetPageVariants, directGetVariantPreviewUrl,
@@ -218,44 +218,7 @@ export async function getUploadCredentials(subAccountId) {
 
 export async function setPageUrl(subAccountId, pageId, domain, slug) {
   return withPage(async (page) => {
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
-
-    try {
-      await directSetPageUrl(page, pageId, domain, slug)
-      return
-    } catch (err) {
-      // URL-taken error should surface directly, not fall back to UI
-      if (err.message?.includes('already taken')) throw err
-      console.error('[direct] setPageUrl failed, falling back to UI:', err.message)
-    }
-
-    // UI fallback
-    await page.click('[data-testid="flyout-page-actions"]')
-    await page.waitForSelector('[data-testid="flyoutPageURL"]')
-    await page.click('[data-testid="flyoutPageURL"]')
-    await page.waitForSelector('[data-testid="speedy_domain_path_input"]')
-
-    await page.click('.select__control')
-    await page.waitForSelector('.select__menu')
-    await page.fill('.select__input', domain)
-    await page.waitForSelector(`.select__option:has-text("${domain}")`)
-    await page.click(`.select__option:has-text("${domain}")`)
-
-    const pathInput = page.locator('[data-testid="speedy_domain_path_input"]')
-    await pathInput.fill('')
-    await pathInput.type(slug)
-    await page.click('[data-testid="submit_speedy_domain_url_modal"]')
-
-    const result = await Promise.race([
-      page.waitForSelector('[data-testid="speedy_domain_path_input"]', { state: 'detached' }).then(() => 'success'),
-      page.waitForSelector('.ChangeUrlModal__error--ZCDTu', { state: 'visible' }).then(() => 'error'),
-    ])
-
-    if (result === 'error') {
-      const errorText = await page.locator('.ChangeUrlModal__error--ZCDTu').textContent()
-      throw new Error(errorText.trim())
-    }
+    await directSetPageUrl(page, pageId, domain, slug)
   })
 }
 
@@ -318,33 +281,10 @@ export async function deleteVariant(subAccountId, pageId, variantLetter) {
 
 export async function publishPage(subAccountId, pageId) {
   return withPage(async (page) => {
+    // directPublish needs a CSRF token from a loaded Unbounce page.
     await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
     await page.waitForLoadState('load')
-
-    try {
-      await directPublish(page, subAccountId, pageId)
-      return
-    } catch (err) {
-      console.error('[direct] publishPage failed, falling back to UI:', err.message)
-    }
-
-    // UI fallback
-    await page.waitForSelector('[data-testid="republish-button"], [data-testid="publish-flyout"]', { timeout: 30000 })
-    const republishBtn = page.locator('[data-testid="republish-button"]')
-    const isRepublish = await republishBtn.isVisible().catch(() => false)
-
-    if (isRepublish) {
-      await republishBtn.click()
-    } else {
-      await page.click('[data-testid="publish-flyout"]')
-      await page.waitForSelector('[data-testid="publish-flyoutitem"]')
-      await page.click('[data-testid="publish-flyoutitem"]')
-    }
-
-    await page.waitForSelector('[data-testid="publishModalBtn"]')
-    await page.click('[data-testid="publishModalBtn"]')
-    await page.waitForLoadState('load')
-    await page.waitForTimeout(2000)
+    await directPublish(page, subAccountId, pageId)
   })
 }
 
@@ -352,22 +292,10 @@ export async function publishPage(subAccountId, pageId) {
 
 export async function unpublishPage(subAccountId, pageId) {
   return withPage(async (page) => {
+    // directUnpublish needs a CSRF token from a loaded Unbounce page.
     await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
     await page.waitForLoadState('load')
-
-    try {
-      await directUnpublish(page, subAccountId, pageId)
-      return
-    } catch (err) {
-      console.error('[direct] unpublishPage failed, falling back to UI:', err.message)
-    }
-
-    // UI fallback
-    await page.waitForSelector('[data-testid="unpublish-button"]')
-    await page.click('[data-testid="unpublish-button"]')
-    await page.waitForSelector('[data-testid="unpublishModalBtn"]')
-    await page.click('[data-testid="unpublishModalBtn"]')
-    await page.waitForLoadState('load')
+    await directUnpublish(page, subAccountId, pageId)
   })
 }
 
@@ -375,22 +303,7 @@ export async function unpublishPage(subAccountId, pageId) {
 
 export async function deletePage(subAccountId, pageId) {
   return withPage(async (page) => {
-    try {
-      await directDelete(page, pageId)
-      return
-    } catch (err) {
-      console.error('[direct] deletePage failed, falling back to UI:', err.message)
-    }
-
-    // UI fallback
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
-    await page.click('[data-testid="flyout-page-actions"]')
-    await page.waitForSelector('[data-testid="flyoutDeletePage"]')
-    await page.click('[data-testid="flyoutDeletePage"]')
-    await page.waitForSelector('[data-testid="confirm-delete-page"]')
-    await page.click('[data-testid="confirm-delete-page"]')
-    await page.waitForTimeout(1000)
+    await directDelete(page, pageId)
   })
 }
 
@@ -593,40 +506,6 @@ export async function duplicatePage(subAccountId, pageId, { includeInactiveVaria
 // ── Edit variant HTML ──────────────────────────────────────────────────────────
 
 /**
- * Get variant numeric IDs by navigating to the page overview and extracting
- * the edit button hrefs. data-testid="button-edit-{letter}" is reliable.
- * Returns { a: '325994188', b: '325994189', ... }
- */
-async function getVariantNumericIds(page, subAccountId, pageId) {
-  await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-  // Wait for either multi-variant edit buttons or the single-variant edit button
-  await page.waitForSelector('[data-testid^="button-edit-"], [data-testid="edit-single-variant"]', { timeout: 30000 })
-
-  const ids = await page.evaluate(() => {
-    // Multi-variant: data-testid="button-edit-a", "button-edit-b", etc.
-    const multiButtons = Array.from(document.querySelectorAll('a[data-testid^="button-edit-"]'))
-    if (multiButtons.length > 0) {
-      return multiButtons.map(a => {
-        const letter = a.getAttribute('data-testid').replace('button-edit-', '')
-        const m = a.getAttribute('href').match(/\/variants\/(\d+)\/edit/)
-        return m ? { letter, numericId: m[1] } : null
-      }).filter(Boolean)
-    }
-    // Single variant: no letter in testid, always variant "a"
-    const singleBtn = document.querySelector('a[data-testid="edit-single-variant"]')
-    if (singleBtn) {
-      const m = singleBtn.getAttribute('href').match(/\/variants\/(\d+)\/edit/)
-      if (m) return [{ letter: 'a', numericId: m[1] }]
-    }
-    return []
-  })
-
-  if (!ids.length) throw new Error('Could not find variant edit buttons on page overview')
-
-  return Object.fromEntries(ids.map(({ letter, numericId }) => [letter, numericId]))
-}
-
-/**
  * Read the current HTML and CSS of a specific variant.
  * Direct path: reads edit.json via API (lp-code-1 + lp-stylesheet-1 elements).
  * Fallback: navigates to the preview iframe for legacy builder pages.
@@ -638,7 +517,12 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
     let html = null
     let css = null
 
-    // Direct path: GraphQL for numeric ID + fetch edit.json (no UI clicking)
+    // Direct path: GraphQL for numeric ID + fetch edit.json (no UI clicking).
+    // If lp-code-1 / lp-stylesheet-1 have any content, return it directly —
+    // that's the authoritative source for MCP-created variants, which store
+    // body content WITHOUT a <!DOCTYPE> wrapper (prepareVariantContent
+    // extracts the body innerHTML). The preview fallback below is only for
+    // true legacy builder pages whose lp-code-1 element is empty.
     try {
       const variantIds = await directGetVariantNumericIds(page, pageId)
       directNumericId = variantIds[variantLetter.toLowerCase()]
@@ -646,8 +530,8 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
       const result = await directGetVariant(page, directNumericId)
       html = result.html
       css = result.css
-      const isFullPage = html && (html.includes('<!DOCTYPE') || html.includes('<html'))
-      if (isFullPage) return { variant: variantLetter, numericId: directNumericId, html, css }
+      const hasContent = html && html.trim().length > 0
+      if (hasContent) return { variant: variantLetter, numericId: directNumericId, html, css }
     } catch (err) {
       console.error('[getVariantContent] Direct path failed:', err.message)
     }
@@ -740,108 +624,19 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
  */
 export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml, newCss) {
   return withPage(async (page) => {
-    // Try fully-direct path: GraphQL for IDs + direct API save (no Playwright navigation)
-    try {
-      const variantIds = await directGetVariantNumericIds(page, pageId)
-      const numericId = variantIds[variantLetter.toLowerCase()]
-      if (!numericId) throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
-      await directEditVariant(page, numericId, newHtml || null, newCss || null, variantLetter)
-      return {
-        variant: variantLetter,
-        numericId,
-        status: 'saved',
-        method: 'direct',
-        html_bytes_written: newHtml ? newHtml.length : null,
-        css_bytes_written: newCss ? newCss.length : null,
-      }
-    } catch (err) {
-    }
-
-    // Playwright UI fallback: navigate to overview to get IDs
-    const variantIds = await getVariantNumericIds(page, subAccountId, pageId)
+    const variantIds = await directGetVariantNumericIds(page, pageId)
     const numericId = variantIds[variantLetter.toLowerCase()]
     if (!numericId) {
-      throw new Error(`Variant "${variantLetter}" not found. Available: ${Object.keys(variantIds).join(', ')}`)
+      throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
     }
-
-    // Navigate to the variant editor
-    const editorUrl = `${UNBOUNCE_APP_BASE}/${subAccountId}/variants/${numericId}/edit`
-    await page.goto(editorUrl)
-    await page.waitForLoadState('load')
-
-    // Wait for the editor to finish loading
-    await page.waitForSelector('#treeToggle', { timeout: 30000 })
-    await page.waitForTimeout(1000)
-
-    let htmlBytesWritten = null
-    let cssBytesWritten = null
-
-    // ── HTML edit ──────────────────────────────────────────────────────────────
-    if (newHtml) {
-      await page.click('#treeToggle')
-      await page.waitForTimeout(500)
-
-      await page.click('li.lp-code.editor-content-tree-group-list-item a.content-tree-node-wrapper')
-      await page.waitForTimeout(500)
-
-      await page.waitForSelector('.panel-content a.full-width-button', { timeout: 10000 })
-      await page.click('.panel-content a.full-width-button')
-
-      await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-      await page.evaluate((html) => {
-        document.querySelector('.CodeMirror').CodeMirror.setValue(html)
-      }, newHtml)
-
-      // Read back length before closing (CodeMirror is gone after close)
-      htmlBytesWritten = await page.evaluate(() =>
-        document.querySelector('.CodeMirror')?.CodeMirror?.getValue()?.length ?? 0
-      )
-
-      await page.click('a.save-code-button')
-      await page.waitForTimeout(500)
+    await directEditVariant(page, numericId, newHtml || null, newCss || null, variantLetter)
+    return {
+      variant: variantLetter,
+      numericId,
+      status: 'saved',
+      html_bytes_written: newHtml ? newHtml.length : null,
+      css_bytes_written: newCss ? newCss.length : null,
     }
-
-    // ── CSS edit ───────────────────────────────────────────────────────────────
-    if (newCss) {
-      await page.click('span.lp-stylesheet.shelf-button')
-      await page.waitForTimeout(300)
-
-      await page.waitForSelector('div.menu .menu-item.popup-menu-item', { timeout: 5000 })
-      await page.locator('div.menu .menu-item.popup-menu-item').first().click()
-      await page.waitForTimeout(500)
-
-      await page.waitForSelector('.CodeMirror', { timeout: 10000 })
-      await page.evaluate((css) => {
-        document.querySelector('.CodeMirror').CodeMirror.setValue(css)
-      }, newCss)
-
-      // Read back length before closing
-      cssBytesWritten = await page.evaluate(() =>
-        document.querySelector('.CodeMirror')?.CodeMirror?.getValue()?.length ?? 0
-      )
-
-      await page.click('a.save-code-button.modal-button')
-      await page.waitForTimeout(500)
-    }
-
-    // ── Save the variant ───────────────────────────────────────────────────────
-    try {
-      await page.click('a.save-button-container a.save, .save-button-container .save')
-      await page.waitForTimeout(1000)
-    } catch (err) {
-      // Content was written to the editor but the save click failed.
-      // Do NOT re-edit from scratch — retry by calling edit_variant again.
-      return {
-        variant: variantLetter,
-        numericId,
-        status: 'save_failed',
-        html_bytes_written: htmlBytesWritten,
-        css_bytes_written: cssBytesWritten,
-        error: `Content was written to the editor (html_bytes_written: ${htmlBytesWritten}) but the save failed: ${err.message}. Call edit_variant again to retry the save.`,
-      }
-    }
-
-    return { variant: variantLetter, numericId, status: 'saved', html_bytes_written: htmlBytesWritten, css_bytes_written: cssBytesWritten }
   })
 }
 
@@ -859,62 +654,8 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
  */
 export async function addVariant(subAccountId, pageId, html, css) {
   return withPage(async (page) => {
-    // --- Direct path (preferred): GraphQL createVariant with blank template ---
-    try {
-      const { variant, numericId } = await directCreateVariantFromScratch(page, pageId, html, css)
-      return { variant, numericId, status: html || css ? 'created_and_edited' : 'created' }
-    } catch (err) {
-      console.error('[direct] createVariantFromScratch failed, falling back to UI:', err.message)
-    }
-
-    // --- Playwright UI fallback ---
-    await page.goto(`${UNBOUNCE_APP_BASE}/${subAccountId}/pages/${pageId}/overview`)
-    await page.waitForLoadState('load')
-
-    const existingIds = await getVariantNumericIds(page, subAccountId, pageId)
-    const existingLetters = new Set(Object.keys(existingIds))
-
-    // Open the flyout and click Add Variant
-    await page.click('[data-testid="flyout-page-actions"]')
-    await page.waitForSelector('[data-testid="flyoutAddVariant"]')
-    await page.click('[data-testid="flyoutAddVariant"]')
-
-    // Select "Start from scratch" (data-testid="scratch-radiobutton")
-    await page.waitForSelector('[data-testid="button-create-variant"]', { timeout: 15000 })
-    const scratchRadio = page.locator('[data-testid="scratch-radiobutton"]')
-    if (await scratchRadio.isVisible()) await scratchRadio.click()
-
-    await page.click('[data-testid="button-create-variant"]')
-
-    // Wait for new variant to appear in the overview
-    await page.waitForFunction(
-      (existing) => {
-        const buttons = Array.from(document.querySelectorAll('a[data-testid^="button-edit-"]'))
-        const letters = buttons.map(a => a.getAttribute('data-testid').replace('button-edit-', ''))
-        return letters.some(l => !existing.includes(l))
-      },
-      [...existingLetters],
-      { timeout: 30000 }
-    )
-
-    const updatedIds = await getVariantNumericIds(page, subAccountId, pageId)
-    const newLetter = Object.keys(updatedIds).filter(l => !existingLetters.has(l)).sort().pop()
-    if (!newLetter) throw new Error('Could not identify the newly created variant')
-    const newNumericId = updatedIds[newLetter]
-
-    // Initialize with blank slate (replaces the blank template's default elements)
-    try {
-      await directInitBlankSlate(page, newNumericId, html, css, newLetter)
-    } catch (initErr) {
-      return {
-        variant: newLetter,
-        numericId: newNumericId,
-        status: 'created',
-        edit_error: `Variant ${newLetter.toUpperCase()} created but blank slate init failed: ${initErr.message}. Call edit_variant with variant: "${newLetter}" to set the HTML/CSS, then republish.`,
-      }
-    }
-
-    return { variant: newLetter, numericId: newNumericId, status: html || css ? 'created_and_edited' : 'created' }
+    const { variant, numericId } = await directCreateVariantFromScratch(page, pageId, html, css)
+    return { variant, numericId, status: html || css ? 'created_and_edited' : 'created' }
   })
 }
 
