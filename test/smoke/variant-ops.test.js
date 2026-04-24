@@ -9,6 +9,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as fs from 'node:fs'
+import * as os from 'node:os'
 import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { McpClient } from '../harness/mcp-client.js'
@@ -25,11 +26,13 @@ function parseToolResult(result) {
 
 test('add_variant → rename_variant → get_page_variants → activate → deactivate', { timeout: 240000 }, async () => {
   const env = loadTestEnv()
+  const stderrFile = path.join(os.tmpdir(), `smoke-variant-ops-${Date.now()}.log`)
   const client = new McpClient({
     env: {
       UNBOUNCE_API_KEY: env.UNBOUNCE_API_KEY,
       UNBOUNCE_MCP_SESSION_FILE: env.UNBOUNCE_MCP_SESSION_FILE,
     },
+    stderrFile,
   })
   await client.start()
 
@@ -81,6 +84,16 @@ test('add_variant → rename_variant → get_page_variants → activate → deac
       variant: newLetter,
       confirm: true,
     })
+
+    // add_variant must use the fast GraphQL direct path, not the UI fallback.
+    // The UI fallback is 10x slower and fragile — if the direct path breaks
+    // silently, users pay a cost. Fail loud instead.
+    // Missing stderr file = server emitted nothing, i.e. no fallback occurred.
+    const stderr = fs.existsSync(stderrFile) ? fs.readFileSync(stderrFile, 'utf8') : ''
+    assert.ok(
+      !stderr.includes('createVariantFromScratch failed, falling back to UI'),
+      'add_variant fell back to UI automation — direct GraphQL path is broken'
+    )
   } finally {
     if (pageId) {
       try {

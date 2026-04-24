@@ -605,13 +605,17 @@ export async function directRenameVariant(page, pageUuid, variantLetter, name) {
  */
 const BLANK_TEMPLATE_ID = 'UGFnZVRlbXBsYXRlLTEyMzU5'
 
+// NOTE: createVariant.errors is [String!], not a list of {message} objects —
+// do NOT add a { message } subfield selection here. Other mutations in this
+// file (deletePages, changeVariantWeights) DO use errors { message } because
+// their errors fields are a different schema type. Verify before copying.
 const CREATE_VARIANT_MUTATION = `
 mutation CreateVariant($input: CreateVariantInput!) {
   createVariant(input: $input) {
     page {
       challengerVariants { nodes { variantId editPath } }
     }
-    errors { message }
+    errors
   }
 }`
 
@@ -761,7 +765,7 @@ export async function directCreateVariantFromScratch(page, pageId, html, css) {
   }, jwt)
 
   const errors = data?.createVariant?.errors
-  if (errors?.length) throw new Error(errors.map(e => e.message).join('; '))
+  if (errors?.length) throw new Error(errors.join('; '))
 
   // 2. Find the new variant from challengerVariants (highest letter = most recently added)
   const challengers = data?.createVariant?.page?.challengerVariants?.nodes ?? []
