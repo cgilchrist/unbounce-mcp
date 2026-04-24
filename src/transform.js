@@ -403,6 +403,8 @@ export function extractCss($) {
  * Scope a raw CSS string (no <style> wrapper) and return it as a <style>
  * block with layout overrides appended. Ready for lp-stylesheet-1.content.html.
  */
+const OVERRIDES_MARKER = '/* ubexport layout overrides */'
+
 export function scopeRawCss(css) {
   // Strip any existing <style> wrapper and any embedded <link> tags
   const raw = decodeHtmlEntities(
@@ -411,10 +413,25 @@ export function scopeRawCss(css) {
       .replace(/<\/style>\s*$/i, '')
       .replace(/<link[^>]*>/gi, '')
   )
-  const bodyScoped = raw.replace(/(?<![a-zA-Z0-9_.#-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
-  const scoped = scopeCssToContainer(bodyScoped, '#lp-code-1')
-  const overrides = scoped.includes('ubexport layout overrides') ? '' : `\n${LAYOUT_OVERRIDES}`
-  return `<style>\n${scoped}${overrides}\n</style>`
+
+  // If input is the output of a prior scopeRawCss call, LAYOUT_OVERRIDES is
+  // already present and starts at the marker comment. Everything from the
+  // marker onward targets containers above #lp-code-1 and MUST NOT be
+  // re-scoped — prefixing e.g. `#lp-pom-root` with `#lp-code-1 ` breaks it
+  // because #lp-pom-root is an ancestor of #lp-code-1, not a descendant.
+  const markerIdx = raw.indexOf(OVERRIDES_MARKER)
+  const userCss = markerIdx === -1 ? raw : raw.slice(0, markerIdx)
+  const existingOverrides = markerIdx === -1 ? null : raw.slice(markerIdx)
+
+  const bodyScoped = userCss.replace(/(?<![a-zA-Z0-9_.#-])body\b(?!\.lp-pom-body)/g, 'body.lp-pom-body:not(.lp-convertable-page)')
+  const scoped = scopeCssToContainer(bodyScoped, '#lp-code-1').trim()
+
+  // Normalize both paths (fresh LAYOUT_OVERRIDES constant and re-entered
+  // overrides from a prior call) to the same whitespace shape so the output
+  // is byte-identical across calls — i.e. idempotent.
+  const overridesContent = (existingOverrides ?? LAYOUT_OVERRIDES).trim()
+
+  return `<style>\n${scoped}\n${overridesContent}\n</style>`
 }
 
 /**

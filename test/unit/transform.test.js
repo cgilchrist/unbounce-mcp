@@ -39,10 +39,36 @@ test('scopeCssToContainer does not double-prefix already-scoped selectors', () =
   assert.equal(count, 1, `expected 1 #lp-code-1 prefix, got ${count}: ${out}`)
 })
 
-// NOTE: a scopeRawCss idempotency test was dropped here. The harness surfaced
-// that scopeRawCss is NOT idempotent — it appends LAYOUT_OVERRIDES whose
-// `#lp-pom-*` and `html` selectors get re-scoped on a second pass and break.
-// Fix tracked separately; do not reintroduce this test without fixing the fn.
+test('scopeRawCss is idempotent — scoping twice matches scoping once', () => {
+  const css = '.hero { color: red; } .cta { background: blue; }'
+  const once = scopeRawCss(css)
+  const twice = scopeRawCss(once)
+  assert.equal(once, twice, 'scopeRawCss produced different output on second pass')
+})
+
+test('scopeRawCss does not double-scope CSS an agent copy-pasted from another variant', () => {
+  // Real-world scenario: an agent creates a blank variant, then copies the
+  // CSS field from variant A (already processed by scopeRawCss, contains
+  // both #lp-code-1-prefixed user rules and the LAYOUT_OVERRIDES block) and
+  // pastes it as the new variant's CSS. The MCP must NOT add a second
+  // #lp-code-1 prefix — that would turn "#lp-code-1 .hero" into
+  // "#lp-code-1 #lp-code-1 .hero" and break the rule entirely.
+  const variantACss = scopeRawCss('.hero { color: red; } .cta { background: blue; }')
+  const processed = scopeRawCss(variantACss)
+
+  // User selectors keep exactly one #lp-code-1 prefix
+  assert.doesNotMatch(processed, /#lp-code-1 #lp-code-1 \.hero/, 'user CSS got double-scoped')
+  assert.doesNotMatch(processed, /#lp-code-1 #lp-code-1 \.cta/, 'user CSS got double-scoped')
+  assert.match(processed, /#lp-code-1 \.hero/, 'user CSS should still be scoped')
+  assert.match(processed, /#lp-code-1 \.cta/, 'user CSS should still be scoped')
+
+  // Layout overrides remain untouched — #lp-pom-root must not get prefixed
+  assert.doesNotMatch(processed, /#lp-code-1 #lp-pom-root/, 'layout override got re-scoped')
+
+  // Marker comment appears exactly once
+  const markerCount = (processed.match(/ubexport layout overrides/g) || []).length
+  assert.equal(markerCount, 1, 'layout overrides block should be present exactly once')
+})
 
 test('scopeRawCss scopes user selectors and appends layout overrides once', () => {
   const out = scopeRawCss('.hero { color: red; }')
