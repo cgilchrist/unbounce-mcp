@@ -13,7 +13,7 @@ import * as path from 'path'
 import { chromium } from 'playwright'
 import { SESSION_DIR, SESSION_FILE, UNBOUNCE_APP_BASE } from './config.js'
 import { getPage } from './api.js'
-import { computeTiles } from './screenshot-tiles.js'
+import { JPEG_TIERS, pickTier } from './screenshot-quality.js'
 import {
   clearJwtCache,
   directPublish, directUnpublish, directDelete,
@@ -375,38 +375,55 @@ export async function getVariantPreviewUrl(subAccountId, pageId, variantLetter) 
   })
 }
 
-const JPEG_QUALITY = 85
-const DSR = 2 // deviceScaleFactor — renders at 2x for retina sharpness
+// deviceScaleFactor is set to 2 on the Playwright context; Playwright's
+// screenshot `scale` option lets us choose 'device' (2x output) or 'css'
+// (1x output) per call, picked dynamically by pickTier() below.
+const CONTEXT_DSR = 2
+
+// Total binary byte budget across BOTH desktop and mobile images in a
+// single tool response. The MCP 1 MB cap applies to the JSON-encoded
+// response, which base64-inflates binary data by 33%. Target ~700 KB
+// binary ≈ ~950 KB serialized — enough headroom for JSON framing and
+// captions to keep the real response under 1 MB.
+const TOTAL_BUDGET = 700 * 1024
+
+// Mobile is captured only if desktop leaves at least this much budget.
+// If the predicted-or-actual mobile image exceeds remaining budget,
+// it is dropped rather than returned over-budget.
+const MOBILE_MIN_BUDGET = 150 * 1024
 
 /**
- * Scroll to each tile y-offset and capture that viewport slice as JPEG.
- * Avoids Playwright's fullPage:true + post-hoc slicing so we don't need
- * an image-processing dependency. Each tile ends up well under 1 MB
- * base64 at quality 85 and DSR 2.
+ * Capture a single screenshot at the highest JPEG quality / scale whose
+ * encoded output stays under `budget`. Estimates bytes up front; if the
+ * actual buffer exceeds the budget we step down one tier and retry until
+ * it fits or we hit the floor.
  */
-async function captureTilesAtViewport(page, width, totalHeight) {
-  const tiles = computeTiles(totalHeight)
-  const buffers = []
-  for (const tile of tiles) {
-    await page.setViewportSize({ width, height: tile.height })
-    await page.evaluate(y => window.scrollTo(0, y), tile.y)
-    await page.waitForTimeout(200)
-    const buf = await page.screenshot({ type: 'jpeg', quality: JPEG_QUALITY })
-    buffers.push({ buffer: buf, tile })
+async function captureWithBudget(page, cssWidth, cssHeight, budget) {
+  const predicted = pickTier(cssWidth, cssHeight, budget)
+  const startIdx = JPEG_TIERS.indexOf(predicted)
+  for (let i = startIdx; i < JPEG_TIERS.length; i++) {
+    const tier = JPEG_TIERS[i]
+    const buf = await page.screenshot({
+      type: 'jpeg',
+      quality: tier.quality,
+      scale: tier.dsr === 2 ? 'device' : 'css',
+    })
+    const last = i === JPEG_TIERS.length - 1
+    if (buf.length <= budget || last) {
+      return { buffer: buf, tier }
+    }
   }
-  return buffers
 }
 
-function tileImages(buffers, labelBase, width) {
-  const total = buffers.length
-  return buffers.map(({ buffer, tile }, i) => ({
+function imagePart({ buffer, tier }, labelBase, width) {
+  const kb = Math.round(buffer.length / 1024)
+  return {
     data: buffer.toString('base64'),
     mimeType: 'image/jpeg',
-    caption: total === 1
-      ? `${labelBase} (${width}px wide)`
-      : `${labelBase} (${width}px wide, tile ${i + 1}/${total}, y ${tile.y}–${tile.y + tile.height})`,
-  }))
+    caption: `${labelBase} (${width}px wide, ${tier.dsr}x, q=${tier.quality}, ${kb} KB)`,
+  }
 }
+
 
 export async function screenshotVariant(subAccountId, pageId, variantLetter, { source = 'preview' } = {}) {
   const letter = variantLetter.toLowerCase()
@@ -421,25 +438,32 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
     return withPage(async (page) => {
       await page.goto(pageUrl, { waitUntil: 'networkidle', timeout: 30000 })
 
-      const captureAtWidth = async (width) => {
+      const captureAtWidth = async (width, budget) => {
         await page.setViewportSize({ width, height: 900 })
         await page.waitForTimeout(300)
         const totalHeight = await page.evaluate(() => document.documentElement.scrollHeight)
-        return captureTilesAtViewport(page, width, totalHeight)
+        await page.setViewportSize({ width, height: totalHeight })
+        await page.waitForTimeout(200)
+        return captureWithBudget(page, width, totalHeight, budget)
       }
 
-      const desktopTiles = await captureAtWidth(1280)
-      const mobileTiles = await captureAtWidth(390)
-
+      const desktopShot = await captureAtWidth(1280, TOTAL_BUDGET)
       const labelBase = `Variant ${variantLetter.toUpperCase()} — ${name ?? ''} (published)`.trim()
-      return {
-        _type: 'images',
-        images: [
-          ...tileImages(desktopTiles, `${labelBase} desktop`, 1280),
-          ...tileImages(mobileTiles, `${labelBase} mobile`, 390),
-        ],
+      const images = [imagePart(desktopShot, `${labelBase} desktop`, 1280)]
+
+      const remaining = TOTAL_BUDGET - desktopShot.buffer.length
+      if (remaining >= MOBILE_MIN_BUDGET) {
+        const mobileShot = await captureAtWidth(390, remaining)
+        // Include mobile only if it ACTUALLY fits — even the floor tier
+        // can exceed estimate on photo-dense pages. Better to drop than
+        // return over-budget and get the whole response rejected.
+        if (mobileShot.buffer.length <= remaining) {
+          images.push(imagePart(mobileShot, `${labelBase} mobile`, 390))
+        }
       }
-    }, { deviceScaleFactor: DSR })
+
+      return { _type: 'images', images }
+    }, { deviceScaleFactor: CONTEXT_DSR })
   }
 
   // ── Preview mode (default) ──────────────────────────────────────────────────
@@ -477,9 +501,9 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
     }
 
     // Resize iframe to target width, wait for reflow, measure height, stretch
-    // iframe element to that height, then scroll-and-capture tile by tile.
+    // iframe element to that height, set viewport to match, then capture.
     // Order matters: measuring before resize returns the previous width's height.
-    const captureAtWidth = async (width) => {
+    const captureAtWidth = async (width, budget) => {
       await page.setViewportSize({ width, height: 900 })
       await page.evaluate((w) => {
         const iframe = document.getElementById('page-preview-output')
@@ -497,21 +521,27 @@ export async function screenshotVariant(subAccountId, pageId, variantLetter, { s
         const iframe = document.getElementById('page-preview-output')
         if (iframe) iframe.style.setProperty('height', h + 'px', 'important')
       }, height)
-      return captureTilesAtViewport(page, width, height)
+      await page.setViewportSize({ width, height })
+      await page.waitForTimeout(200)
+      return captureWithBudget(page, width, height, budget)
     }
 
-    const desktopTiles = await captureAtWidth(1280)
-    const mobileTiles = await captureAtWidth(390)
-
+    const desktopShot = await captureAtWidth(1280, TOTAL_BUDGET)
     const labelBase = `Variant ${variantLetter.toUpperCase()} — ${variant.name ?? ''}`.trim()
-    return {
-      _type: 'images',
-      images: [
-        ...tileImages(desktopTiles, `${labelBase} desktop`, 1280),
-        ...tileImages(mobileTiles, `${labelBase} mobile`, 390),
-      ],
+    const images = [imagePart(desktopShot, `${labelBase} desktop`, 1280)]
+
+    const remaining = TOTAL_BUDGET - desktopShot.buffer.length
+    if (remaining >= MOBILE_MIN_BUDGET) {
+      const mobileShot = await captureAtWidth(390, remaining)
+      // Drop mobile if even floor-tier capture exceeds remaining budget,
+      // rather than returning over-budget and getting rejected by MCP.
+      if (mobileShot.buffer.length <= remaining) {
+        images.push(imagePart(mobileShot, `${labelBase} mobile`, 390))
+      }
     }
-  }, { deviceScaleFactor: DSR })
+
+    return { _type: 'images', images }
+  }, { deviceScaleFactor: CONTEXT_DSR })
 }
 
 // ── Duplicate page ─────────────────────────────────────────────────────────────

@@ -27,20 +27,20 @@ function extractImages(result) {
   return (result.content ?? []).filter(c => c.type === 'image')
 }
 
-// MCP tool result limit is 1 MB. Base64 inflates 33%, so each tile's binary
-// size must stay under ~750 KB to be safe in aggregate. Enforce per tile
-// because the limit applies to the whole tool response, not individual parts.
-const TILE_BYTE_LIMIT = 900 * 1024
+// MCP clients cap the FULL tool response at 1 MB. Base64 inflates 33%, plus
+// JSON framing and captions — a ~750 KB binary payload encodes to ~1 MB
+// serialized. Assert total binary stays below that ceiling so the response
+// actually gets accepted by the client.
+const TOTAL_RESPONSE_BUDGET = 750 * 1024
 
-function assertTilesFitLimit(images, label) {
+function assertResponseFitsLimit(result, label) {
+  const images = extractImages(result)
   assert.ok(images.length > 0, `${label} returned no image parts`)
-  for (let i = 0; i < images.length; i++) {
-    const binBytes = Math.floor(images[i].data.length * 3 / 4)
-    assert.ok(
-      binBytes < TILE_BYTE_LIMIT,
-      `${label} tile ${i + 1}/${images.length} is ${binBytes} bytes — above ${TILE_BYTE_LIMIT}`
-    )
-  }
+  const totalBin = images.reduce((s, img) => s + Math.floor(img.data.length * 3 / 4), 0)
+  assert.ok(
+    totalBin < TOTAL_RESPONSE_BUDGET,
+    `${label} total response ${totalBin} bytes exceeds ${TOTAL_RESPONSE_BUDGET} budget across ${images.length} image part(s)`
+  )
 }
 
 test('screenshot_variant returns an image for preview and published', { timeout: 240000 }, async () => {
@@ -73,7 +73,7 @@ test('screenshot_variant returns an image for preview and published', { timeout:
       variant: 'a',
       source: 'preview',
     })
-    assertTilesFitLimit(extractImages(previewShot), 'preview')
+    assertResponseFitsLimit(previewShot, 'preview')
 
     const publishedShot = await client.call('screenshot_variant', {
       sub_account_id: env.UNBOUNCE_SANDBOX_SUB_ACCOUNT_ID,
@@ -81,7 +81,7 @@ test('screenshot_variant returns an image for preview and published', { timeout:
       variant: 'a',
       source: 'published',
     })
-    assertTilesFitLimit(extractImages(publishedShot), 'published')
+    assertResponseFitsLimit(publishedShot, 'published')
   } finally {
     if (pageId) {
       try {
