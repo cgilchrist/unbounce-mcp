@@ -210,7 +210,7 @@ export const TOOL_DEFINITIONS = [
       type: 'object',
       properties: {
         sub_account_id: { type: 'string' },
-        with_stats: { type: 'boolean', description: 'Include traffic and A/B test stats (visitors, conversions, conversion rate, variants_count, etc.) for each page. Use when filtering or comparing pages by performance. Slower than a plain list. NOTE: variants_count is the number of additional variants beyond the champion — it is always 1 less than the actual total. A page with variants_count: 0 has exactly 1 variant (no A/B test). A page with variants_count: 1 has 2 variants total, etc.' },
+        with_stats: { type: 'boolean', description: 'Include traffic and A/B test stats (visitors, conversions, conversion rate, etc.) for each page. Use when filtering or comparing pages by performance. Slower than a plain list. NOTE: variants_count from this endpoint is unreliable (Unbounce\'s REST API returns 0 regardless of actual count). For accurate variant counts, call get_page or get_page_variants on a specific page.' },
         count_only: { type: 'boolean', description: 'Return only the total count of pages, not the list. Fast — use before fetching all pages or when the user just wants to know how many pages exist.' },
         from: { type: 'string', description: 'ISO 8601 datetime — only return pages created after this date.' },
         to: { type: 'string', description: 'ISO 8601 datetime — only return pages created before this date.' },
@@ -221,7 +221,7 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'get_page',
-    description: 'Get details of a specific Unbounce page including state, URL, variant count, and publish date. NOTE: variants_count is the number of additional variants beyond the champion — always 1 less than the actual total. variants_count: 0 means exactly 1 variant (no A/B test running).',
+    description: 'Get details of a specific Unbounce page including state, URL, variant count, and publish date. variants_count is the TOTAL number of variants on the page (champion + challengers + discarded). variants_active_count excludes discarded variants — that\'s the count agents usually care about. variants_count: 1 means exactly one variant (no A/B test). For per-variant detail (names, weights, states), call get_page_variants.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -858,7 +858,20 @@ export async function handleTool(name, args) {
     }
 
     case 'get_page': {
-      return getPage(args.page_id)
+      // REST returns the page metadata (state, url, conversion stats) but
+      // its `variantsCount` field is permanently 0 — appears to be broken
+      // upstream (verified across multiple pages). Pull the accurate count
+      // from GraphQL alongside the REST call so agents see the truth.
+      const [page, variantData] = await Promise.all([
+        getPage(args.page_id),
+        getPageVariants(null, args.page_id).catch(() => null),
+      ])
+      const variants = variantData?.variants ?? []
+      return {
+        ...page,
+        variants_count: variants.length,
+        variants_active_count: variants.filter(v => v.state !== 'discarded').length,
+      }
     }
 
     case 'list_page_groups': {
