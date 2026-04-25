@@ -27,6 +27,21 @@ export function parseAssetUploadResponse(html) {
   if (!html || typeof html !== 'string') {
     throw new Error('Upload response was empty')
   }
+
+  // Unbounce signals upload rejection by inverting the JS callback name —
+  // assetUploadFailed([...errors]) instead of assetUploaded({...}). The
+  // common case is "Content Paperclip::Errors::NotIdentifiedByImageMagickError",
+  // meaning ImageMagick couldn't decode the bytes (heavily-compressed
+  // synthetic PNGs from AI tools sometimes hit this). Translate it into a
+  // useful error so the agent retries with different bytes instead of
+  // chasing a "could not find assetUploaded" red herring.
+  const failed = html.match(/assetUploadFailed\s*\(\s*\[([\s\S]*?)\]\s*\)/)
+  if (failed) {
+    const reasons = [...failed[1].matchAll(/['"]([^'"]+)['"]/g)].map(m => m[1])
+    const reasonText = reasons.length ? reasons.join('; ') : '(no reason given)'
+    throw new Error(`Unbounce rejected the upload: ${reasonText}`)
+  }
+
   const match = html.match(/assetUploaded\s*\(\s*\{([\s\S]*?)\}\s*\)/)
   if (!match) {
     throw new Error(`Could not find assetUploaded(...) call in upload response`)

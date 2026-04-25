@@ -64,6 +64,25 @@ test('parseAssetUploadResponse parses double-quoted string values too', () => {
   assert.equal(out.contentContentType, 'image/png')
 })
 
+test('parseAssetUploadResponse surfaces Unbounce rejection reason from assetUploadFailed', () => {
+  // When ImageMagick can't decode the bytes (common with synthetic PNGs from
+  // AI tools), Unbounce returns assetUploadFailed([...]) with Paperclip error
+  // names. We translate that into a clear error so the agent retries with
+  // different bytes instead of chasing an opaque parser failure.
+  const html = `<!DOCTYPE html><html><head><script>
+    window.parent.editor.activeAssetUploader.assetUploadFailed(["Content Paperclip::Errors::NotIdentifiedByImageMagickError"]);
+  </script></head></html>`
+  assert.throws(
+    () => parseAssetUploadResponse(html),
+    /Unbounce rejected the upload: Content Paperclip::Errors::NotIdentifiedByImageMagickError/
+  )
+})
+
+test('parseAssetUploadResponse joins multiple rejection reasons', () => {
+  const html = `<script>assetUploadFailed(["error one", "error two"]);</script>`
+  assert.throws(() => parseAssetUploadResponse(html), /error one; error two/)
+})
+
 test('parseAssetUploadResponse throws on missing assetUploaded call', () => {
   assert.throws(
     () => parseAssetUploadResponse('<html><body>nope</body></html>'),

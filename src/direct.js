@@ -584,7 +584,25 @@ export async function directUploadImage(page, subAccountId, { buffer, filename, 
     throw new Error(`Asset upload HTTP ${res.status()}: ${body.slice(0, 200)}`)
   }
 
-  const meta = parseAssetUploadResponse(await res.text())
+  const responseText = await res.text()
+  let meta
+  try {
+    meta = parseAssetUploadResponse(responseText)
+  } catch (err) {
+    // Known-shape errors (Unbounce-rejection messages) already carry the
+    // actionable reason. Only attach a response-body preview when the shape
+    // itself is unrecognized — that's the signal we'd need to update the
+    // parser, and it's the only case worth the 400-char dump.
+    if (/Could not find assetUploaded/.test(err.message)) {
+      const responseContentType = res.headers()['content-type'] ?? '(no content-type)'
+      const preview = responseText.slice(0, 400).replace(/\s+/g, ' ').trim()
+      throw new Error(
+        `${err.message} (HTTP ${res.status()}, content-type: ${responseContentType}, ` +
+        `body length: ${responseText.length}, preview: "${preview}")`
+      )
+    }
+    throw err
+  }
   return {
     id: meta.id,
     uuid: meta.uuid,
