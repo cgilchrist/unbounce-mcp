@@ -283,3 +283,4 @@ Only pages whose name starts with `smoke-` are touched.
 
 - **`console.log` is forbidden** in `src/`. `stdout` is the MCP transport — a stray `console.log` corrupts JSON-RPC frames. Always use `console.error` for debug output; the harness streams stderr live with an `[mcp]` prefix.
 - Unit tests use Node 18+'s built-in `node:test`. No Jest / Vitest dependency.
+- See [`UPSTREAM.md`](UPSTREAM.md) for the running log of Unbounce-side bugs we work around (and where the workaround lives) plus API gaps worth raising upstream.
