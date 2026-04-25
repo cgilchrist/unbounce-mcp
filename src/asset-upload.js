@@ -33,9 +33,14 @@ export function parseAssetUploadResponse(html) {
   }
   const body = match[1]
 
+  // Tolerant of both single- and double-quoted string values — Unbounce's
+  // response template uses single quotes today, but we don't want a future
+  // shape change to silently break rehost (it does — the asset still uploads
+  // server-side, but the parser throws, the caller catches, and the data:
+  // URI is left in the deployed HTML).
   const str = (key) => {
-    const m = body.match(new RegExp(`\\b${key}\\s*:\\s*'([^']*)'`))
-    return m ? m[1] : null
+    const m = body.match(new RegExp(`\\b${key}\\s*:\\s*(?:'([^']*)'|"((?:[^"\\\\]|\\\\.)*)")`))
+    return m ? (m[1] ?? m[2]) : null
   }
   const num = (key) => {
     const m = body.match(new RegExp(`\\b${key}\\s*:\\s*(-?\\d+)`))

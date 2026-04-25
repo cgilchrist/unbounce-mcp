@@ -246,6 +246,33 @@ test('rehostImages: rehostExternal:true fetches and uploads, skipping unbounce.c
   assert.doesNotMatch(text, /https:\/\/example\.com/)
 })
 
+test('rehostImages: throws when data: URIs survive the swap (e.g. upload-parse failure)', async () => {
+  // Simulates the silent-failure mode: the upload "succeeded" (asset is in
+  // Unbounce's library) but the response parser threw, so cdn_url never
+  // arrived back and the data: URI was left in place. Without this guard
+  // the deploy "succeeds" with broken images.
+  const html = `<img src="data:image/png;base64,iVBORw0KGgo=" alt="X">`
+  await assert.rejects(
+    () => rehostImages(html, {
+      uploadFn: async () => { throw new Error('Upload response parse failed: simulated') },
+    }),
+    /data: URI.*output.*Upload response parse failed: simulated/
+  )
+})
+
+test('rehostImages: does NOT throw when data: URIs survive but resolveDataUris was off', async () => {
+  // Caller explicitly opted out of data: URI rehosting — leaving them in
+  // the output is the intended behavior, not a failure.
+  const html = `<img src="data:image/png;base64,iVBORw0KGgo=" alt="X">`
+  const { text, uploaded, errors } = await rehostImages(html, {
+    resolveDataUris: false,
+    uploadFn: async () => { throw new Error('would not be called') },
+  })
+  assert.equal(uploaded.length, 0)
+  assert.equal(errors.length, 0)
+  assert.match(text, /data:image\/png/)
+})
+
 test('rehostImages: per-ref errors stay in place; other refs still succeed', async () => {
   const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rehost-test-'))
   try {

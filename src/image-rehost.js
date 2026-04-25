@@ -400,5 +400,23 @@ export async function rehostImages(text, {
     }
   }
 
+  // Integrity guard: data: URIs are the always-rehosted category. If any
+  // survived the swap when we were asked to handle them, something between
+  // upload and substitution dropped the CDN URL — most likely the upload
+  // response parser threw, the catch above recorded an error, and the
+  // group's cdn_url was never set. Without this guard the deploy "succeeds"
+  // with broken images embedded in the published HTML. Fail loudly so the
+  // agent retries instead.
+  if (resolveDataUris && /data:image\/[a-z0-9.+-]+;base64,/i.test(outText)) {
+    const summary = errors.length
+      ? errors.map(e => `${e.ref ? `ref ${String(e.ref).slice(0, 60)}` : `hash ${e.hash}`}: ${e.message}`).join('; ')
+      : '(no errors captured)'
+    throw new Error(
+      `Image rehost left data: URI(s) in the output (${errors.length} upload/parse error(s)). ` +
+      `Asset(s) may have uploaded but their CDN URLs were not substituted. ` +
+      `Errors: ${summary}`
+    )
+  }
+
   return { text: outText, uploaded, errors }
 }

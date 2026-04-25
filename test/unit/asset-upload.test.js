@@ -44,6 +44,26 @@ test('parseAssetUploadResponse extracts id / uuid / name / size / mime from the 
   assert.equal(out.contentContentType, 'image/jpeg')
 })
 
+test('parseAssetUploadResponse parses double-quoted string values too', () => {
+  // Defensive: Unbounce templates use single quotes today, but if the response
+  // shape ever flips to double quotes, the asset still uploaded server-side
+  // and we must NOT silently throw — losing the cdn_url leaves data: URIs
+  // in the deployed HTML.
+  const html = `<script>assetUploaded({
+    id: "42",
+    uuid: "abcd1234-5678-90ab-cdef-1234567890ab",
+    name: "double-quoted.png",
+    content_file_size: 100,
+    content_content_type: "image/png"
+  });</script>`
+  const out = parseAssetUploadResponse(html)
+  assert.equal(out.id, '42')
+  assert.equal(out.uuid, 'abcd1234-5678-90ab-cdef-1234567890ab')
+  assert.equal(out.name, 'double-quoted.png')
+  assert.equal(out.contentFileSize, 100)
+  assert.equal(out.contentContentType, 'image/png')
+})
+
 test('parseAssetUploadResponse throws on missing assetUploaded call', () => {
   assert.throws(
     () => parseAssetUploadResponse('<html><body>nope</body></html>'),
