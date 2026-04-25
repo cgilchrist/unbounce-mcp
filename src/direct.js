@@ -8,6 +8,7 @@
  */
 
 import { prepareVariantContent, scopeRawCss } from './transform.js'
+import { stampBodyHtml } from './signature.js'
 
 const GATEWAY = 'https://gateway.unbounce.com/graphql'
 const APP_BASE = 'https://app.unbounce.com'
@@ -515,7 +516,7 @@ export async function directEditVariant(page, numericId, newHtml, newCss, varian
   if (resolvedHtml) {
     const el = elements.find(e => e.id === 'lp-code-1') || elements.find(e => e.type === 'lp-code')
     if (!el) throw new Error(`No lp-code element found in variant`)
-    el.content.html = resolvedHtml
+    el.content.html = stampBodyHtml(resolvedHtml)
   }
   if (resolvedCss) {
     const el = elements.find(e => e.id === 'lp-stylesheet-1') || elements.find(e => e.type === 'lp-stylesheet')
@@ -744,7 +745,7 @@ export async function directInitBlankSlate(page, numericId, html, css, variantLe
   const { resolvedHtml, resolvedCss } = resolveContent(html, css, variantLetter)
   const { raw, fullResponse } = await fetchVariantState(page, numericId, jwt)
 
-  raw.elements = JSON.stringify(blankElements(resolvedHtml, resolvedCss))
+  raw.elements = JSON.stringify(blankElements(stampBodyHtml(resolvedHtml), resolvedCss))
 
   const csrf = await ensureCsrf(page)
   const xml = buildSaveXml(fullResponse)

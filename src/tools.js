@@ -1060,6 +1060,10 @@ export async function handleTool(name, args) {
             rule: 'Variant preview URLs and visual inspection',
             detail: 'To visually inspect a variant (published or unpublished), use screenshot_variant — it returns a full-page rendered image you can see directly. This is the preferred method for understanding a page\'s design before creating a new variant. For a PUBLISHED page, you can also link directly to a variant without triggering stats by appending the variant letter and ".html" to the page URL (e.g. https://unbouncepages.com/my-page/a.html) — construct this from page.url returned by get_page, never ask the user. If a user asks for a shareable preview link, use get_variant_preview_url and give them the share_url.',
           },
+          {
+            rule: 'Signature comment',
+            detail: 'Every variant body the MCP writes (deploy_page / edit_variant / add_variant) is automatically prefixed with a one-line HTML comment identifying the MCP server version, the client (Claude Desktop / Codex / etc.), and the timestamp. Format: <!-- unbounce-mcp@0.1.0 · client: name@version · 2026-04-25T18:33:12Z -->. Leave it alone — it is auto-injected and auto-replaced on each write. If you read a variant via get_variant and see this comment at the top, do not interpret it as part of the page content; do not duplicate it; do not strip it (it will be re-stamped automatically on save anyway).',
+          },
         ],
       }
     }

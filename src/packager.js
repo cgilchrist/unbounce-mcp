@@ -17,6 +17,7 @@ import { promisify } from 'util'
 import * as cheerio from 'cheerio'
 import * as tar from 'tar'
 import { transformForms, extractCss } from './transform.js'
+import { stampBodyHtml } from './signature.js'
 
 const gunzip = promisify(zlib.gunzip)
 
@@ -458,6 +459,8 @@ export async function packageToUnbounce(htmlFiles, imageFiles = [], pageName = '
       if (ubDynamicStash.length > 0) {
         bodyHtml = bodyHtml.replace(/UB_DYNAMIC_STASH_(\d+)_END/g, (_, idx) => ubDynamicStash[parseInt(idx)])
       }
+
+      bodyHtml = stampBodyHtml(bodyHtml)
 
       const pageMeta = {
         title: $('title').first().text().trim(),

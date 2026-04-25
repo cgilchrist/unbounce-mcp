@@ -53,6 +53,8 @@ test('deploy → get_variant → edit_variant → get_variant → delete_page', 
     })
     const variant = parseToolResult(variantRaw)
     assert.match(variant.html ?? '', /Hello from the unbounce-mcp smoke test/)
+    // Signature: every MCP-written body should start with the stamp comment.
+    assert.match(variant.html ?? '', /^<!-- unbounce-mcp@\d+\.\d+\.\d+ · client: [^@]+@[^ ]+ · \d{4}-/, 'deploy_page output must start with signature comment')
 
     await client.call('edit_variant', {
       sub_account_id: env.UNBOUNCE_SANDBOX_SUB_ACCOUNT_ID,
@@ -68,6 +70,10 @@ test('deploy → get_variant → edit_variant → get_variant → delete_page', 
     })
     const variantV2 = parseToolResult(variantV2Raw)
     assert.match(variantV2.html ?? '', /Hello v2 from the smoke test/)
+    // Edits should produce a fresh stamp (new timestamp) and not stack.
+    const stampCount = (variantV2.html ?? '').match(/<!-- unbounce-mcp@/g)?.length ?? 0
+    assert.equal(stampCount, 1, `edit_variant should produce exactly one signature stamp, got ${stampCount}`)
+    assert.notEqual(variantV2.html, variant.html, 'edit should change the html (new stamp + new content)')
   } finally {
     if (pageId) {
       try {

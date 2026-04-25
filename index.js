@@ -9,6 +9,7 @@ import {
 import { TOOL_DEFINITIONS, handleTool } from './src/tools.js'
 import { closeBrowser } from './src/browser.js'
 import { VARIANT_CREATION_RULES } from './src/variant-rules.js'
+import { registerServer } from './src/signature.js'
 
 const server = new Server(
   {
@@ -54,6 +55,8 @@ When setting up an A/B test on a page that was in standard mode (single variant)
   },
   { capabilities: { tools: {} } }
 )
+
+registerServer(server)
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: TOOL_DEFINITIONS,
