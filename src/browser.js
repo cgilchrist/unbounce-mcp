@@ -744,20 +744,30 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
  * @param {string|null} newHtml - Full HTML content, or null to skip
  * @param {string|null} newCss - Full CSS content (with <style> tags), or null to skip
  */
-export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml, newCss) {
+export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml, newCss, { transcodeImages = true } = {}) {
   return withPage(async (page) => {
     const variantIds = await directGetVariantNumericIds(page, pageId)
     const numericId = variantIds[variantLetter.toLowerCase()]
     if (!numericId) {
       throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
     }
-    await directEditVariant(page, numericId, newHtml || null, newCss || null, variantLetter)
+
+    // Auto-transcode any data: URI images into uploaded CDN URLs before
+    // storing. Caller can opt out via transcodeImages: false.
+    let resolvedHtml = newHtml || null
+    let resolvedCss = newCss || null
+    if (transcodeImages) {
+      if (resolvedHtml) resolvedHtml = await transcodeHtmlImages(page, subAccountId, resolvedHtml, 'inline')
+      if (resolvedCss)  resolvedCss  = await transcodeHtmlImages(page, subAccountId, resolvedCss,  'inline')
+    }
+
+    await directEditVariant(page, numericId, resolvedHtml, resolvedCss, variantLetter)
     return {
       variant: variantLetter,
       numericId,
       status: 'saved',
-      html_bytes_written: newHtml ? newHtml.length : null,
-      css_bytes_written: newCss ? newCss.length : null,
+      html_bytes_written: resolvedHtml ? resolvedHtml.length : null,
+      css_bytes_written: resolvedCss ? resolvedCss.length : null,
     }
   })
 }
@@ -774,10 +784,16 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
  * @param {string|null} css  - CSS to write into the new variant, or null to keep the duplicate
  * @returns {{ variant: string, numericId: string, status: string }}
  */
-export async function addVariant(subAccountId, pageId, html, css) {
+export async function addVariant(subAccountId, pageId, html, css, { transcodeImages = true } = {}) {
   return withPage(async (page) => {
-    const { variant, numericId } = await directCreateVariantFromScratch(page, pageId, html, css)
-    return { variant, numericId, status: html || css ? 'created_and_edited' : 'created' }
+    let resolvedHtml = html || null
+    let resolvedCss = css || null
+    if (transcodeImages) {
+      if (resolvedHtml) resolvedHtml = await transcodeHtmlImages(page, subAccountId, resolvedHtml, 'inline')
+      if (resolvedCss)  resolvedCss  = await transcodeHtmlImages(page, subAccountId, resolvedCss,  'inline')
+    }
+    const { variant, numericId } = await directCreateVariantFromScratch(page, pageId, resolvedHtml, resolvedCss)
+    return { variant, numericId, status: resolvedHtml || resolvedCss ? 'created_and_edited' : 'created' }
   })
 }
 
@@ -801,6 +817,54 @@ export async function renameVariant(subAccountId, pageId, variantLetter, name) {
 // ── Asset (image) upload ──────────────────────────────────────────────────────
 
 import { parseDataUrl, resolveUploadFilename } from './asset-upload.js'
+import { transcodeDataUris } from './transcode-images.js'
+
+const MIME_EXT = {
+  'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif',
+  'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/avif': 'avif',
+}
+
+/**
+ * Transcode any data: URI image embedded in `text` to a CDN URL by uploading
+ * each unique payload to the sub-account's asset library. No-op when text is
+ * empty or contains no data URIs. Per-image upload failures are tolerated
+ * (the URI stays in place); whole-call failures bubble up.
+ *
+ * Uses the supplied page, so callers must already be inside a withPage().
+ */
+async function transcodeHtmlImages(page, subAccountId, text, label = 'inline') {
+  if (!text) return text
+  const uploadFn = async ({ buffer, mimeType, hash }) => {
+    const ext = MIME_EXT[mimeType] || 'bin'
+    const filename = `${label}-${hash.slice(0, 12)}.${ext}`
+    return directUploadImage(page, subAccountId, { buffer, filename, mimeType })
+  }
+  const { text: out, uploaded, errors } = await transcodeDataUris(text, uploadFn)
+  if (uploaded.length) {
+    console.error(`[transcode] uploaded ${uploaded.length} inline image(s) → CDN`)
+  }
+  if (errors.length) {
+    console.error(`[transcode] ${errors.length} upload(s) failed; data URIs left in place`)
+    for (const e of errors) console.error(`  - ${e.message}`)
+  }
+  return out
+}
+
+/**
+ * Transcode embedded data: URI images across a list of variant html files.
+ * Used by deploy_page before the packager runs — opens its own withPage so
+ * the packager can stay synchronous + browser-free.
+ */
+export async function transcodeVariantImages(subAccountId, htmlFiles) {
+  return withPage(async (page) => {
+    const out = []
+    for (const file of htmlFiles) {
+      const html = await transcodeHtmlImages(page, subAccountId, file.html, 'inline')
+      out.push({ ...file, html })
+    }
+    return out
+  })
+}
 
 /**
  * Upload an image to the sub-account's asset library. Accepts ONE of:

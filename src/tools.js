@@ -22,6 +22,7 @@ import {
   activateVariant, deactivateVariant, promoteVariant, deleteVariant,
   getJavascripts, setJavascripts,
   uploadImage, deleteImage,
+  transcodeVariantImages,
   reauthenticate,
 } from './browser.js'
 import { VALID_PLACEMENTS } from './javascripts.js'
@@ -356,6 +357,10 @@ export const TOOL_DEFINITIONS = [
           type: 'boolean',
           description: 'Whether to publish immediately after setup. Defaults to true.',
         },
+        transcode_images: {
+          type: 'boolean',
+          description: 'When true (default), the MCP scans the supplied HTML/CSS for embedded data: URI images, uploads each unique payload to the sub-account\'s asset library, and replaces every occurrence with a CDN URL — so single-file HTML with inlined images ends up using real Unbounce-hosted assets. Same image embedded multiple times is uploaded once. Set to false to keep data URIs in the stored variant verbatim (rarely useful).',
+        },
       },
       required: ['sub_account_id'],
     },
@@ -556,6 +561,10 @@ export const TOOL_DEFINITIONS = [
         css: { type: 'string', description: 'Full CSS content (include <style> tags). Use css_file_path instead for large files.' },
         html_file_path: { type: 'string', description: 'Absolute path to an HTML file on disk. Use instead of html for large files.' },
         css_file_path: { type: 'string', description: 'Absolute path to a CSS file on disk. Use instead of css for large files.' },
+        transcode_images: {
+          type: 'boolean',
+          description: 'When true (default), embedded data: URI images in html/css are auto-uploaded to the asset library and replaced with CDN URLs before storage. Set false to keep data URIs verbatim.',
+        },
       },
       required: ['sub_account_id', 'page_id', 'variant'],
     },
@@ -572,6 +581,10 @@ export const TOOL_DEFINITIONS = [
         css: { type: 'string', description: 'CSS to write into the new variant (include <style> tags). Use css_file_path instead for large files.' },
         html_file_path: { type: 'string', description: 'Absolute path to an HTML file on disk. Use instead of html for large files.' },
         css_file_path: { type: 'string', description: 'Absolute path to a CSS file on disk. Use instead of css for large files.' },
+        transcode_images: {
+          type: 'boolean',
+          description: 'When true (default), embedded data: URI images in html/css are auto-uploaded to the asset library and replaced with CDN URLs before storage. Set false to keep data URIs verbatim.',
+        },
       },
       required: ['sub_account_id', 'page_id'],
     },
@@ -901,6 +914,7 @@ export async function handleTool(name, args) {
         traffic_mode,
         variant_weights,
         publish = true,
+        transcode_images = true,
       } = args
 
       let htmlFiles
@@ -931,7 +945,13 @@ export async function handleTool(name, args) {
       const resolvedPageName = page_name || (html_file_paths?.[0] ? path.basename(html_file_paths[0], '.html') : 'Page')
       const variantIds = htmlFiles.map((_, i) => 'abcdefghijklmnopqrstuvwxyz'[i])
 
-      const fileBuffer = await packageToUnbounce(htmlFiles, [], resolvedPageName)
+      // Auto-transcode embedded data: URI images into uploaded CDN assets
+      // before packaging. Default on; opt out with transcode_images: false.
+      const filesForPackaging = transcode_images
+        ? await transcodeVariantImages(sub_account_id, htmlFiles)
+        : htmlFiles
+
+      const fileBuffer = await packageToUnbounce(filesForPackaging, [], resolvedPageName)
       const fileName = `${slugify(resolvedPageName)}.unbounce`
 
       return uploadAndConfigure({
@@ -944,8 +964,8 @@ export async function handleTool(name, args) {
         trafficMode: traffic_mode,
         variantWeights: variant_weights,
         variantIds,
-        htmlFiles,
-        isMultiVariant: htmlFiles.length > 1,
+        htmlFiles: filesForPackaging,
+        isMultiVariant: filesForPackaging.length > 1,
         publish,
       })
     }
@@ -1047,14 +1067,18 @@ export async function handleTool(name, args) {
       const html = args.html || (args.html_file_path ? await fs.promises.readFile(args.html_file_path, 'utf8') : null)
       const css = args.css || (args.css_file_path ? await fs.promises.readFile(args.css_file_path, 'utf8') : null)
       if (!html && !css) throw new Error('Provide at least one of: html, css, html_file_path, css_file_path')
-      const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, html, css)
+      const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, html, css, {
+        transcodeImages: args.transcode_images !== false,
+      })
       return result
     }
 
     case 'add_variant': {
       const html = args.html || (args.html_file_path ? await fs.promises.readFile(args.html_file_path, 'utf8') : null)
       const css = args.css || (args.css_file_path ? await fs.promises.readFile(args.css_file_path, 'utf8') : null)
-      return addVariant(args.sub_account_id, args.page_id, html, css)
+      return addVariant(args.sub_account_id, args.page_id, html, css, {
+        transcodeImages: args.transcode_images !== false,
+      })
     }
 
     case 'duplicate_variant': {
