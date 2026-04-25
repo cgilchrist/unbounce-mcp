@@ -92,32 +92,36 @@ async function uploadAndConfigure({ fileBuffer, fileName, pageName, subAccountId
     }
   }
 
-  // Traffic mode + variant weights
-  if (isMultiVariant) {
-    const resolvedMode = trafficMode || 'ab_test'
-    try {
-      await setTrafficMode(subAccountId, pageId, resolvedMode)
-      if (resolvedMode === 'ab_test') {
-        const weights = variantWeights || evenWeights(variantIds)
-        try {
-          await setVariantWeights(subAccountId, pageId, weights)
-        } catch (err) {
-          pendingSteps.push({
-            step: 'set_variant_weights',
-            tool: 'set_variant_weights',
-            args: { sub_account_id: subAccountId, page_id: pageId, weights },
-            error: err.message,
-          })
-        }
+  // Traffic mode + variant weights.
+  // Single-variant pages need an explicit setTrafficMode('standard') — the
+  // bare upload lands in Unbounce's default routing strategy ('weighted'),
+  // which makes the Pages list display the page as "A/B Test" even though
+  // there's only one variant. Always set the mode so the UI is correct.
+  const resolvedMode = isMultiVariant
+    ? (trafficMode || 'ab_test')
+    : 'standard'
+  try {
+    await setTrafficMode(subAccountId, pageId, resolvedMode)
+    if (resolvedMode === 'ab_test') {
+      const weights = variantWeights || evenWeights(variantIds)
+      try {
+        await setVariantWeights(subAccountId, pageId, weights)
+      } catch (err) {
+        pendingSteps.push({
+          step: 'set_variant_weights',
+          tool: 'set_variant_weights',
+          args: { sub_account_id: subAccountId, page_id: pageId, weights },
+          error: err.message,
+        })
       }
-    } catch (err) {
-      pendingSteps.push({
-        step: 'set_traffic_mode',
-        tool: 'set_traffic_mode',
-        args: { sub_account_id: subAccountId, page_id: pageId, mode: resolvedMode },
-        error: err.message,
-      })
     }
+  } catch (err) {
+    pendingSteps.push({
+      step: 'set_traffic_mode',
+      tool: 'set_traffic_mode',
+      args: { sub_account_id: subAccountId, page_id: pageId, mode: resolvedMode },
+      error: err.message,
+    })
   }
 
   // Publish — skip if URL wasn't set (would publish at wrong/UUID slug)
