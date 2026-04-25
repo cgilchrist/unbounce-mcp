@@ -206,6 +206,34 @@ test('rehostImages: relative refs resolve against baseDir and replace cleanly', 
   }
 })
 
+test('rehostImages: relative ref with .jpeg extension uploads as image/jpeg (not octet-stream)', async () => {
+  // Regression: mimeFromExt previously did a reverse-lookup on a MIME→ext
+  // table that only had {jpg}, missing {jpeg}. JPEGs with `.jpeg` extension
+  // got uploaded as application/octet-stream / .bin and Unbounce rejected
+  // them with "Content has contents that are not what they are reported to be".
+  const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rehost-test-'))
+  try {
+    // Real JPEG magic header so the file is plausibly a JPEG to any sniffer.
+    const jpegBytes = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('rest-of-fake-jpeg-bytes')])
+    await fs.promises.writeFile(path.join(tmp, 'photo.jpeg'), jpegBytes)
+
+    const calls = []
+    const html = `<img src="photo.jpeg" alt="Photo">`
+    await rehostImages(html, {
+      baseDir: tmp,
+      uploadFn: async ({ filename, mimeType }) => {
+        calls.push({ filename, mimeType })
+        return { cdn_url: `https://cdn.example/${filename}` }
+      },
+    })
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].mimeType, 'image/jpeg', '.jpeg ext must map to image/jpeg, not octet-stream')
+    assert.match(calls[0].filename, /\.jpg$/, 'derived filename uses canonical .jpg extension')
+  } finally {
+    await fs.promises.rm(tmp, { recursive: true, force: true })
+  }
+})
+
 test('rehostImages: external URLs are passed through unless rehostExternal:true', async () => {
   const html = `<img src="https://example.com/x.png" alt="External">`
   const noOp = await rehostImages(html, {
@@ -256,7 +284,7 @@ test('rehostImages: throws when data: URIs survive the swap (e.g. upload-parse f
     () => rehostImages(html, {
       uploadFn: async () => { throw new Error('Upload response parse failed: simulated') },
     }),
-    /data: URI.*output.*Upload response parse failed: simulated/
+    /unresolved ref.*Upload response parse failed: simulated/
   )
 })
 
@@ -273,21 +301,42 @@ test('rehostImages: does NOT throw when data: URIs survive but resolveDataUris w
   assert.match(text, /data:image\/png/)
 })
 
-test('rehostImages: per-ref errors stay in place; other refs still succeed', async () => {
+test('rehostImages: throws when any ref fails — partial success ships a broken page', async () => {
+  // The integrity guard: if any ref the caller asked to rehost ends up
+  // unsubstituted in the output, the deployed page will reference the
+  // original (missing file / rejected upload / etc.). Better to fail loud
+  // than ship a half-working page.
   const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rehost-test-'))
   try {
     await fs.promises.writeFile(path.join(tmp, 'real.png'), Buffer.from('fake-png-bytes'))
-
     const html = `<img src="real.png" alt="Real"><img src="missing.png" alt="Missing">`
-    const { text, uploaded, errors } = await rehostImages(html, {
-      baseDir: tmp,
-      uploadFn: async ({ filename }) => ({ cdn_url: `https://cdn.example/${filename}` }),
-    })
-    assert.equal(uploaded.length, 1, 'real.png succeeded')
-    assert.equal(errors.length, 1, 'missing.png failed')
-    assert.match(errors[0].ref, /missing\.png/)
-    assert.match(text, /https:\/\/cdn\.example\//, 'real.png replaced')
-    assert.match(text, /missing\.png/, 'missing.png left in place')
+    await assert.rejects(
+      () => rehostImages(html, {
+        baseDir: tmp,
+        uploadFn: async ({ filename }) => ({ cdn_url: `https://cdn.example/${filename}` }),
+      }),
+      /unresolved ref.*missing\.png/
+    )
+  } finally {
+    await fs.promises.rm(tmp, { recursive: true, force: true })
+  }
+})
+
+test('rehostImages: throws and surfaces rejected upload refs (not just hashes)', async () => {
+  // Upload failure path: bytes resolved successfully, hash computed,
+  // upload threw. The error must carry the original ref string(s) so
+  // the integrity guard can prove they survived in the output.
+  const tmp = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'rehost-test-'))
+  try {
+    await fs.promises.writeFile(path.join(tmp, 'rejected.png'), Buffer.from('fake-png-bytes'))
+    const html = `<img src="rejected.png" alt="X">`
+    await assert.rejects(
+      () => rehostImages(html, {
+        baseDir: tmp,
+        uploadFn: async () => { throw new Error('Unbounce rejected the upload: BadMagic') },
+      }),
+      /unresolved ref.*refs rejected\.png.*Unbounce rejected.*BadMagic/
+    )
   } finally {
     await fs.promises.rm(tmp, { recursive: true, force: true })
   }

@@ -284,12 +284,24 @@ async function resolveRefToBytes(ref, { baseDir, fetchFn = globalThis.fetch }) {
   throw new Error(`Unknown ref type: ${ref.type}`)
 }
 
+// Forward map ext → MIME. MIME_EXT (above) is the canonical-output direction
+// (one ext per MIME, used for filename derivation); this table covers the
+// inbound side where multiple extensions can map to the same MIME (notably
+// .jpg AND .jpeg both → image/jpeg). A previous reverse-lookup over
+// MIME_EXT silently mishandled `.jpeg`, causing rehost to upload JPEGs as
+// application/octet-stream / .bin → Unbounce rejected them.
+const EXT_TO_MIME = Object.freeze({
+  jpg: 'image/jpeg', jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  avif: 'image/avif',
+})
+
 function mimeFromExt(filename) {
   const ext = (filename.match(/\.([^.?#]+)(?:[?#]|$)/i) || [])[1]?.toLowerCase()
-  for (const [mime, mappedExt] of Object.entries(MIME_EXT)) {
-    if (mappedExt === ext) return mime
-  }
-  return 'application/octet-stream'
+  return EXT_TO_MIME[ext] || 'application/octet-stream'
 }
 
 /**
@@ -386,7 +398,13 @@ export async function rehostImages(text, {
         sources: group.refs.map(r => r.type),
       })
     } catch (err) {
-      errors.push({ hash: group.hash, message: err.message ?? String(err) })
+      // Capture the failed group's ref strings too — the integrity guard
+      // needs them to detect surviving refs of any type, not just data: URIs.
+      errors.push({
+        hash: group.hash,
+        refs: [...new Set(group.refs.map(r => r.raw))],
+        message: err.message ?? String(err),
+      })
     }
   }
 
@@ -400,20 +418,37 @@ export async function rehostImages(text, {
     }
   }
 
-  // Integrity guard: data: URIs are the always-rehosted category. If any
-  // survived the swap when we were asked to handle them, something between
-  // upload and substitution dropped the CDN URL — most likely the upload
-  // response parser threw, the catch above recorded an error, and the
-  // group's cdn_url was never set. Without this guard the deploy "succeeds"
-  // with broken images embedded in the published HTML. Fail loudly so the
-  // agent retries instead.
-  if (resolveDataUris && /data:image\/[a-z0-9.+-]+;base64,/i.test(outText)) {
+  // Integrity guard: any ref the caller asked us to rehost that didn't
+  // make it into the output means the deployed page will reference the
+  // original (data: URI / relative path / external URL) instead of a
+  // working CDN URL. That's a broken page. Fail loud so the caller retries
+  // instead of shipping silently.
+  //
+  // Two ways a failed ref shows up:
+  //   - data: URIs always — even if no errors[], a survivor means the swap
+  //     itself dropped the cdn_url somehow (defense in depth).
+  //   - errors[] with .refs or .ref — failed groups carry the original ref
+  //     string(s); we check whether any are still in outText.
+  const survivingFailedRefs = []
+  for (const e of errors) {
+    const refs = e.refs ?? (e.ref ? [e.ref] : [])
+    for (const raw of refs) {
+      if (raw && outText.includes(raw)) survivingFailedRefs.push({ raw, message: e.message })
+    }
+  }
+  const hasOrphanDataUri = resolveDataUris && /data:image\/[a-z0-9.+-]+;base64,/i.test(outText)
+  if (survivingFailedRefs.length > 0 || hasOrphanDataUri) {
     const summary = errors.length
-      ? errors.map(e => `${e.ref ? `ref ${String(e.ref).slice(0, 60)}` : `hash ${e.hash}`}: ${e.message}`).join('; ')
-      : '(no errors captured)'
+      ? errors.map(e => {
+          const refStr = e.refs?.length ? `refs ${e.refs.map(r => String(r).slice(0, 60)).join(', ')}` :
+                         e.ref ? `ref ${String(e.ref).slice(0, 60)}` :
+                         `hash ${e.hash}`
+          return `${refStr}: ${e.message}`
+        }).join('; ')
+      : '(no errors captured — output check failed)'
     throw new Error(
-      `Image rehost left data: URI(s) in the output (${errors.length} upload/parse error(s)). ` +
-      `Asset(s) may have uploaded but their CDN URLs were not substituted. ` +
+      `Image rehost left ${survivingFailedRefs.length || 'one or more'} unresolved ref(s) in the output. ` +
+      `The deployed page would reference the originals (data: URIs / paths / external URLs) instead of CDN URLs. ` +
       `Errors: ${summary}`
     )
   }
