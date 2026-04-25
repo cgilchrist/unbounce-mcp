@@ -20,8 +20,10 @@ import {
   getPageInsights, getPageStats, findPagesByStats, editVariantHtml, getVariantContent, addVariant,
   renameVariant, duplicateVariant, getPageVariants, getVariantPreviewUrl, screenshotVariant,
   activateVariant, deactivateVariant, promoteVariant, deleteVariant,
+  getJavascripts, setJavascripts,
   reauthenticate,
 } from './browser.js'
+import { VALID_PLACEMENTS } from './javascripts.js'
 
 /** Compute even integer split weights that sum to 100. Champion (variant a) gets the +1 remainder. */
 export function evenWeights(variantIds) {
@@ -715,6 +717,49 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'get_javascripts',
+    description: 'Read all custom JavaScripts on a variant — the entries managed via Unbounce\'s "JavaScripts" panel (slots: Head, After Body Tag, Before Body End Tag). Returns each script\'s name, placement, and HTML content. Use this BEFORE set_javascripts to know what\'s currently there, and when modernizing a Classic Builder variant to extract custom JS verbatim. Does NOT return the variant\'s main lp-stylesheet-1 CSS (use get_variant for that).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter: a, b, c, etc.' },
+      },
+      required: ['sub_account_id', 'page_id', 'variant'],
+    },
+  },
+  {
+    name: 'set_javascripts',
+    description: 'Replace ALL custom JavaScripts on a variant with the supplied list. Each script has a name (optional), placement ("head", "body_top", or "body_bottom"), and HTML content (must include the <script> tags themselves). Pass an empty scripts array to clear all custom scripts. The variant\'s HTML body, main CSS, and any other element types are NOT touched. Use this to add tracking pixels (GTM, GA, Meta), 3rd-party widgets, or migrate scripts from a Classic Builder source. The agent CANNOT write scripts to lp-code-1 directly — they must go through this tool. After setting, republish the page for the changes to take effect.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        page_id: { type: 'string', description: 'UUID of the page' },
+        variant: { type: 'string', description: 'Variant letter: a, b, c, etc.' },
+        scripts: {
+          type: 'array',
+          description: 'Replacement list. Pass [] to clear all scripts.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: 'Display name for the script (e.g. "GTM", "Meta Pixel"). Optional — defaults to "Script {N}".' },
+              placement: {
+                type: 'string',
+                enum: VALID_PLACEMENTS,
+                description: '"head" = inside <head>; "body_top" = immediately after <body>; "body_bottom" = immediately before </body>.',
+              },
+              html: { type: 'string', description: 'Full HTML to inject — MUST include the <script> tags themselves.' },
+            },
+            required: ['placement', 'html'],
+          },
+        },
+      },
+      required: ['sub_account_id', 'page_id', 'variant', 'scripts'],
+    },
+  },
+  {
     name: 'get_landing_page_guidelines',
     description: 'Returns landing page best practices and conversion rules. MUST be called before generating any landing page HTML.',
     inputSchema: { type: 'object', properties: {} },
@@ -1045,6 +1090,25 @@ export async function handleTool(name, args) {
       }
     }
 
+    case 'get_javascripts': {
+      return getJavascripts(args.sub_account_id, args.page_id, args.variant)
+    }
+
+    case 'set_javascripts': {
+      if (!Array.isArray(args.scripts)) {
+        throw new Error('scripts must be an array (pass [] to clear all scripts).')
+      }
+      for (let i = 0; i < args.scripts.length; i++) {
+        const s = args.scripts[i]
+        if (!s || typeof s !== 'object') throw new Error(`scripts[${i}] must be an object`)
+        if (typeof s.placement !== 'string') throw new Error(`scripts[${i}].placement is required`)
+        if (typeof s.html !== 'string' || !s.html.trim()) {
+          throw new Error(`scripts[${i}].html must be a non-empty string`)
+        }
+      }
+      return setJavascripts(args.sub_account_id, args.page_id, args.variant, args.scripts)
+    }
+
     case 'get_landing_page_guidelines': {
       return {
         rules: [
@@ -1110,7 +1174,7 @@ export async function handleTool(name, args) {
               '',
               'CUSTOM HTML WIDGETS (<div class="lp-element lp-code" ...> blocks that sit ALONGSIDE other Classic Builder widgets like text blocks, images, and forms on the same page — the user dropped them in via the "Custom HTML" widget): copy the inner HTML verbatim into the replica, in the same position the source had it. Don\'t minify, reformat, audit values inside, or "improve" them. Common contents: 3rd-party embeds (Calendly, HubSpot, Typeform, video players, chat widgets), custom navigation/modals, tracking pixels. Any change you make can silently break the integration. Note: this is a DIFFERENT mechanism from the single lp-code element MCP-managed variants use to hold their entire body content — the latter is the variant body, not a widget, and is replaced as part of the modernization.',
               '',
-              'CUSTOM <script> TAGS that aren\'t Unbounce\'s runtime (publisher.bundle.js, lp-page-builder bundles, GA/GTM that the user obviously added, etc.): preserve verbatim, AND match the source\'s placement. Classic Builder offers three placement slots — "Head", "After Body Tag" (immediately after <body>), and "Before Body End Tag" (immediately before </body>). Determine which slot each script came from by where it appears in the rendered HTML, and place it in the corresponding slot in the replica. Order within a slot also matters — preserve it.',
+              'CUSTOM <script> TAGS that aren\'t Unbounce\'s runtime (publisher.bundle.js, lp-page-builder bundles, GA/GTM that the user obviously added, etc.): preserve verbatim, AND match the source\'s placement. Classic Builder offers three placement slots — "Head", "After Body Tag" (immediately after <body>), and "Before Body End Tag" (immediately before </body>). Use the get_javascripts tool to read every custom script from the source variant; it returns each script\'s placement as "head", "body_top" (= After Body Tag), or "body_bottom" (= Before Body End Tag). Then call set_javascripts on the replica with the same list, preserving placement and order. DO NOT try to inline these scripts inside lp-code-1 / the variant body — they belong in the script slots, not in the body content. Order within a slot matters; preserve it.',
               '',
               'After placing custom scripts, scan their bodies for selectors targeting Classic Builder auto-IDs (#lp-pom-block-12, #lp-pom-image-458) or .lp-pom-* classes and INCLUDE A NOTE in your delivery summary listing each one — those selectors will not work in the modernized DOM and the user needs to update them. Do NOT try to rewrite the user\'s JS yourself.',
               '',

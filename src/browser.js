@@ -26,6 +26,7 @@ import {
   directSetVariantWeights, directSetTrafficMode, directSetPageUrl,
   directGetVariant, directEditVariant, directGetVariantNumericIds,
   directRenameVariant, directCreateVariantFromScratch,
+  directGetJavascripts, directSetJavascripts,
   directFetchDuplicationOptions, directDuplicatePage,
   directSearchPages, directGetPageInsights, directGetPageStats,
   directGetBulkPageStats, directGetPageVariants, directGetVariantPreviewUrl,
@@ -793,6 +794,32 @@ export async function renameVariant(subAccountId, pageId, variantLetter, name) {
   return withPage(async (page) => {
     const newName = await directRenameVariant(page, pageId, variantLetter, name)
     return { variant: variantLetter, name: newName }
+  })
+}
+
+// ── Custom JavaScripts (Head / After Body Tag / Before Body End Tag) ──────────
+
+export async function getJavascripts(subAccountId, pageId, variantLetter) {
+  return withPage(async (page) => {
+    const variantIds = await directGetVariantNumericIds(page, pageId)
+    const numericId = variantIds[variantLetter.toLowerCase()]
+    if (!numericId) {
+      throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
+    }
+    const scripts = await directGetJavascripts(page, numericId)
+    return { variant: variantLetter, numericId, scripts }
+  })
+}
+
+export async function setJavascripts(subAccountId, pageId, variantLetter, scripts) {
+  return withPage(async (page) => {
+    const variantIds = await directGetVariantNumericIds(page, pageId)
+    const numericId = variantIds[variantLetter.toLowerCase()]
+    if (!numericId) {
+      throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
+    }
+    const result = await directSetJavascripts(page, numericId, scripts)
+    return { variant: variantLetter, numericId, ...result }
   })
 }
 

@@ -9,6 +9,7 @@
 
 import { prepareVariantContent, scopeRawCss } from './transform.js'
 import { stampBodyHtml } from './signature.js'
+import { scriptElementToApi, buildScriptElement } from './javascripts.js'
 
 const GATEWAY = 'https://gateway.unbounce.com/graphql'
 const APP_BASE = 'https://app.unbounce.com'
@@ -541,6 +542,61 @@ export async function directEditVariant(page, numericId, newHtml, newCss, varian
     const body = await saveRes.text()
     throw new Error(`save.xml HTTP ${saveRes.status()}: ${body.slice(0, 200)}`)
   }
+}
+
+// ── Custom JavaScripts (lp-script elements) ───────────────────────────────────
+
+/**
+ * Read all lp-script elements (Custom JavaScripts UI: Head / After Body Tag /
+ * Before Body End Tag) from the variant.
+ */
+export async function directGetJavascripts(page, numericId) {
+  const jwt = await getJwt(page)
+  const { elements } = await fetchVariantState(page, numericId, jwt)
+  return elements
+    .filter(el => el.type === 'lp-script')
+    .map(scriptElementToApi)
+}
+
+/**
+ * Replace ALL lp-script elements on the variant with the supplied list.
+ * Pass an empty array to clear them. Non-script elements (lp-pom-*, the
+ * variant's main lp-stylesheet-1, positioned lp-stylesheet entries, etc.)
+ * are left untouched. Each new element gets a fresh sequential id derived
+ * from `last_element_id`, which is also bumped to keep Unbounce in sync.
+ */
+export async function directSetJavascripts(page, numericId, scripts) {
+  const jwt = await getJwt(page)
+  const { raw, elements, fullResponse } = await fetchVariantState(page, numericId, jwt)
+
+  const kept = elements.filter(el => el.type !== 'lp-script')
+  let nextElementId = Number(raw.last_element_id ?? 0)
+
+  const newScripts = scripts.map(script => {
+    nextElementId += 1
+    return buildScriptElement(script, nextElementId)
+  })
+
+  raw.elements = JSON.stringify([...kept, ...newScripts])
+  raw.last_element_id = nextElementId
+
+  const csrf = await ensureCsrf(page)
+  const xml = buildSaveXml(fullResponse)
+  const req = page.context().request
+  const saveRes = await req.post(`${APP_BASE}/variants/${numericId}/save.xml`, {
+    headers: {
+      'Content-Type': 'application/xml',
+      'Authorization': `Bearer ${jwt}`,
+      ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
+    },
+    data: xml,
+  })
+  if (!saveRes.ok()) {
+    const body = await saveRes.text()
+    throw new Error(`save.xml HTTP ${saveRes.status()}: ${body.slice(0, 200)}`)
+  }
+
+  return { count: newScripts.length, ids: newScripts.map(s => s.id) }
 }
 
 // ── Page URL ───────────────────────────────────────────────────────────────────
