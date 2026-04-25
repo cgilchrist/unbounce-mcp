@@ -22,7 +22,7 @@ import {
   activateVariant, deactivateVariant, promoteVariant, deleteVariant,
   getJavascripts, setJavascripts,
   uploadImage, deleteImage,
-  transcodeVariantImages,
+  rehostVariantImages,
   reauthenticate,
 } from './browser.js'
 import { VALID_PLACEMENTS } from './javascripts.js'
@@ -359,7 +359,11 @@ export const TOOL_DEFINITIONS = [
         },
         transcode_images: {
           type: 'boolean',
-          description: 'When true (default), the MCP scans the supplied HTML/CSS for embedded data: URI images, uploads each unique payload to the sub-account\'s asset library, and replaces every occurrence with a CDN URL — so single-file HTML with inlined images ends up using real Unbounce-hosted assets. Same image embedded multiple times is uploaded once. Set to false to keep data URIs in the stored variant verbatim (rarely useful).',
+          description: 'When true (default), the MCP rehosts embedded images into the sub-account\'s asset library and replaces every occurrence with a CDN URL. Covers (a) data: URIs always, and (b) relative paths in HTML — resolved against the directory of html_file_paths[i] when used (so <img src="logo.png"> or <img src="images/hero.jpg"> next to your HTML file just works). Same image referenced N times uploads once via SHA-256 dedup; the asset library filename is derived from the surrounding context (img alt text, CSS selector). Set to false to keep refs verbatim (rarely useful).',
+        },
+        rehost_external_images: {
+          type: 'boolean',
+          description: 'When true (default false — opt-in), additionally fetches external http(s) image URLs in the HTML/CSS and uploads them to the asset library so the page becomes self-contained on Unbounce\'s CDN. Skips URLs already on unbounce.com so we never re-rehost our own assets. Useful when migrating a scraped page or when an external host might go down. Default OFF because most external URLs work as-is, and silently rehosting them would surprise users who deliberately use their own CDN.',
         },
       },
       required: ['sub_account_id'],
@@ -563,7 +567,11 @@ export const TOOL_DEFINITIONS = [
         css_file_path: { type: 'string', description: 'Absolute path to a CSS file on disk. Use instead of css for large files.' },
         transcode_images: {
           type: 'boolean',
-          description: 'When true (default), embedded data: URI images in html/css are auto-uploaded to the asset library and replaced with CDN URLs before storage. Set false to keep data URIs verbatim.',
+          description: 'When true (default), embedded image refs in html/css (data: URIs always; relative paths when html_file_path is used so they resolve against the source file\'s directory) are auto-uploaded to the asset library and replaced with CDN URLs. Set false to keep refs verbatim.',
+        },
+        rehost_external_images: {
+          type: 'boolean',
+          description: 'When true (default false — opt-in), external http(s) image URLs are also fetched and rehosted to the asset library. Skips URLs already on unbounce.com.',
         },
       },
       required: ['sub_account_id', 'page_id', 'variant'],
@@ -583,7 +591,11 @@ export const TOOL_DEFINITIONS = [
         css_file_path: { type: 'string', description: 'Absolute path to a CSS file on disk. Use instead of css for large files.' },
         transcode_images: {
           type: 'boolean',
-          description: 'When true (default), embedded data: URI images in html/css are auto-uploaded to the asset library and replaced with CDN URLs before storage. Set false to keep data URIs verbatim.',
+          description: 'When true (default), embedded image refs in html/css (data: URIs always; relative paths when html_file_path is used so they resolve against the source file\'s directory) are auto-uploaded to the asset library and replaced with CDN URLs. Set false to keep refs verbatim.',
+        },
+        rehost_external_images: {
+          type: 'boolean',
+          description: 'When true (default false — opt-in), external http(s) image URLs are also fetched and rehosted to the asset library. Skips URLs already on unbounce.com.',
         },
       },
       required: ['sub_account_id', 'page_id'],
@@ -915,19 +927,28 @@ export async function handleTool(name, args) {
         variant_weights,
         publish = true,
         transcode_images = true,
+        rehost_external_images = false,
       } = args
 
       let htmlFiles
       if (html_variants && html_variants.length > 0) {
+        // Raw strings — no base directory, so relative-path resolution is a no-op for these.
         htmlFiles = html_variants.map((html, i) => ({
           name: `variant-${String.fromCharCode(97 + i)}.html`,
           html,
+          baseDir: null,
         }))
       } else if (html_file_paths && html_file_paths.length > 0) {
+        // File paths — capture each file's directory so relative img refs
+        // (logo.png, images/hero.jpg, /assets/x.png) resolve from disk during rehost.
         htmlFiles = await Promise.all(
           html_file_paths.map(async (filePath) => {
             const html = await fs.promises.readFile(filePath, 'utf8')
-            return { name: path.basename(filePath), html }
+            return {
+              name: path.basename(filePath),
+              html,
+              baseDir: path.dirname(filePath),
+            }
           })
         )
       } else {
@@ -945,10 +966,16 @@ export async function handleTool(name, args) {
       const resolvedPageName = page_name || (html_file_paths?.[0] ? path.basename(html_file_paths[0], '.html') : 'Page')
       const variantIds = htmlFiles.map((_, i) => 'abcdefghijklmnopqrstuvwxyz'[i])
 
-      // Auto-transcode embedded data: URI images into uploaded CDN assets
-      // before packaging. Default on; opt out with transcode_images: false.
+      // Rehost embedded image refs (data URIs always; relative paths when a
+      // baseDir is available; external HTTP URLs only if explicitly opted in)
+      // into uploaded CDN assets before packaging. Default ON for the first
+      // two; default OFF for external rehosting.
       const filesForPackaging = transcode_images
-        ? await transcodeVariantImages(sub_account_id, htmlFiles)
+        ? await rehostVariantImages(sub_account_id, htmlFiles, {
+            resolveDataUris: true,
+            resolveRelative: true,
+            rehostExternal: rehost_external_images === true,
+          })
         : htmlFiles
 
       const fileBuffer = await packageToUnbounce(filesForPackaging, [], resolvedPageName)
@@ -1067,8 +1094,14 @@ export async function handleTool(name, args) {
       const html = args.html || (args.html_file_path ? await fs.promises.readFile(args.html_file_path, 'utf8') : null)
       const css = args.css || (args.css_file_path ? await fs.promises.readFile(args.css_file_path, 'utf8') : null)
       if (!html && !css) throw new Error('Provide at least one of: html, css, html_file_path, css_file_path')
+      // baseDir for relative-image resolution: prefer html file's dir, then css file's dir.
+      const baseDir = args.html_file_path ? path.dirname(args.html_file_path)
+                    : args.css_file_path  ? path.dirname(args.css_file_path)
+                    : null
       const result = await editVariantHtml(args.sub_account_id, args.page_id, args.variant, html, css, {
         transcodeImages: args.transcode_images !== false,
+        rehostExternal: args.rehost_external_images === true,
+        baseDir,
       })
       return result
     }
@@ -1076,8 +1109,13 @@ export async function handleTool(name, args) {
     case 'add_variant': {
       const html = args.html || (args.html_file_path ? await fs.promises.readFile(args.html_file_path, 'utf8') : null)
       const css = args.css || (args.css_file_path ? await fs.promises.readFile(args.css_file_path, 'utf8') : null)
+      const baseDir = args.html_file_path ? path.dirname(args.html_file_path)
+                    : args.css_file_path  ? path.dirname(args.css_file_path)
+                    : null
       return addVariant(args.sub_account_id, args.page_id, html, css, {
         transcodeImages: args.transcode_images !== false,
+        rehostExternal: args.rehost_external_images === true,
+        baseDir,
       })
     }
 

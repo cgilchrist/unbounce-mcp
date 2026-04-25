@@ -744,7 +744,12 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
  * @param {string|null} newHtml - Full HTML content, or null to skip
  * @param {string|null} newCss - Full CSS content (with <style> tags), or null to skip
  */
-export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml, newCss, { transcodeImages = true } = {}) {
+export async function editVariantHtml(subAccountId, pageId, variantLetter, newHtml, newCss, opts = {}) {
+  const {
+    transcodeImages = true,
+    rehostExternal = false,
+    baseDir = null,
+  } = opts
   return withPage(async (page) => {
     const variantIds = await directGetVariantNumericIds(page, pageId)
     const numericId = variantIds[variantLetter.toLowerCase()]
@@ -752,13 +757,14 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
       throw new Error(`Variant "${variantLetter}" not found via GraphQL. Available: ${Object.keys(variantIds).join(', ')}`)
     }
 
-    // Auto-transcode any data: URI images into uploaded CDN URLs before
-    // storing. Caller can opt out via transcodeImages: false.
+    // Rehost any embedded image references (data URIs / relative paths /
+    // optionally external URLs) into uploaded CDN URLs before storing.
     let resolvedHtml = newHtml || null
     let resolvedCss = newCss || null
     if (transcodeImages) {
-      if (resolvedHtml) resolvedHtml = await transcodeHtmlImages(page, subAccountId, resolvedHtml, 'inline')
-      if (resolvedCss)  resolvedCss  = await transcodeHtmlImages(page, subAccountId, resolvedCss,  'inline')
+      const rehostOpts = { baseDir, resolveDataUris: true, resolveRelative: true, rehostExternal }
+      if (resolvedHtml) resolvedHtml = await rehostInText(page, subAccountId, resolvedHtml, rehostOpts)
+      if (resolvedCss)  resolvedCss  = await rehostInText(page, subAccountId, resolvedCss,  rehostOpts)
     }
 
     await directEditVariant(page, numericId, resolvedHtml, resolvedCss, variantLetter)
@@ -784,13 +790,19 @@ export async function editVariantHtml(subAccountId, pageId, variantLetter, newHt
  * @param {string|null} css  - CSS to write into the new variant, or null to keep the duplicate
  * @returns {{ variant: string, numericId: string, status: string }}
  */
-export async function addVariant(subAccountId, pageId, html, css, { transcodeImages = true } = {}) {
+export async function addVariant(subAccountId, pageId, html, css, opts = {}) {
+  const {
+    transcodeImages = true,
+    rehostExternal = false,
+    baseDir = null,
+  } = opts
   return withPage(async (page) => {
     let resolvedHtml = html || null
     let resolvedCss = css || null
     if (transcodeImages) {
-      if (resolvedHtml) resolvedHtml = await transcodeHtmlImages(page, subAccountId, resolvedHtml, 'inline')
-      if (resolvedCss)  resolvedCss  = await transcodeHtmlImages(page, subAccountId, resolvedCss,  'inline')
+      const rehostOpts = { baseDir, resolveDataUris: true, resolveRelative: true, rehostExternal }
+      if (resolvedHtml) resolvedHtml = await rehostInText(page, subAccountId, resolvedHtml, rehostOpts)
+      if (resolvedCss)  resolvedCss  = await rehostInText(page, subAccountId, resolvedCss,  rehostOpts)
     }
     const { variant, numericId } = await directCreateVariantFromScratch(page, pageId, resolvedHtml, resolvedCss)
     return { variant, numericId, status: resolvedHtml || resolvedCss ? 'created_and_edited' : 'created' }
@@ -817,49 +829,54 @@ export async function renameVariant(subAccountId, pageId, variantLetter, name) {
 // ── Asset (image) upload ──────────────────────────────────────────────────────
 
 import { parseDataUrl, resolveUploadFilename } from './asset-upload.js'
-import { transcodeDataUris } from './transcode-images.js'
-
-const MIME_EXT = {
-  'image/jpeg': 'jpg', 'image/png': 'png', 'image/gif': 'gif',
-  'image/webp': 'webp', 'image/svg+xml': 'svg', 'image/avif': 'avif',
-}
+import { rehostImages } from './image-rehost.js'
 
 /**
- * Transcode any data: URI image embedded in `text` to a CDN URL by uploading
- * each unique payload to the sub-account's asset library. No-op when text is
- * empty or contains no data URIs. Per-image upload failures are tolerated
- * (the URI stays in place); whole-call failures bubble up.
+ * Rehost embedded image references in `text` to Unbounce-hosted CDN URLs.
+ * Handles three sources, each independently toggleable:
+ *   - data: URIs                   (default on)
+ *   - relative paths from baseDir  (default on, requires baseDir)
+ *   - external http(s) URLs        (default OFF — opt-in via rehostExternal)
  *
- * Uses the supplied page, so callers must already be inside a withPage().
+ * Upload filenames are derived from the surrounding context (img alt text,
+ * CSS selectors), so the asset library is browsable rather than opaque.
+ *
+ * Uses the supplied page; callers must already be inside withPage().
  */
-async function transcodeHtmlImages(page, subAccountId, text, label = 'inline') {
+async function rehostInText(page, subAccountId, text, opts = {}) {
   if (!text) return text
-  const uploadFn = async ({ buffer, mimeType, hash }) => {
-    const ext = MIME_EXT[mimeType] || 'bin'
-    const filename = `${label}-${hash.slice(0, 12)}.${ext}`
+  const uploadFn = async ({ buffer, mimeType, filename }) => {
     return directUploadImage(page, subAccountId, { buffer, filename, mimeType })
   }
-  const { text: out, uploaded, errors } = await transcodeDataUris(text, uploadFn)
+  const { text: out, uploaded, errors } = await rehostImages(text, { ...opts, uploadFn })
   if (uploaded.length) {
-    console.error(`[transcode] uploaded ${uploaded.length} inline image(s) → CDN`)
+    console.error(`[rehost] uploaded ${uploaded.length} image(s) → CDN`)
   }
   if (errors.length) {
-    console.error(`[transcode] ${errors.length} upload(s) failed; data URIs left in place`)
-    for (const e of errors) console.error(`  - ${e.message}`)
+    console.error(`[rehost] ${errors.length} ref(s) failed; left in place`)
+    for (const e of errors) console.error(`  - ${e.ref ?? e.hash ?? '?'}: ${e.message}`)
   }
   return out
 }
 
 /**
- * Transcode embedded data: URI images across a list of variant html files.
- * Used by deploy_page before the packager runs — opens its own withPage so
- * the packager can stay synchronous + browser-free.
+ * Rehost images across a list of variant html files. Used by deploy_page
+ * before the packager runs.
+ *
+ * Each file may carry its own baseDir — html_file_paths-derived files have
+ * one (the directory of the source HTML, used to resolve relative refs);
+ * raw html_variants strings don't, so relative resolution is a no-op for them.
  */
-export async function transcodeVariantImages(subAccountId, htmlFiles) {
+export async function rehostVariantImages(subAccountId, htmlFiles, opts = {}) {
   return withPage(async (page) => {
     const out = []
     for (const file of htmlFiles) {
-      const html = await transcodeHtmlImages(page, subAccountId, file.html, 'inline')
+      const html = await rehostInText(page, subAccountId, file.html, {
+        baseDir: file.baseDir ?? null,
+        resolveDataUris: opts.resolveDataUris !== false,
+        resolveRelative: opts.resolveRelative !== false,
+        rehostExternal: opts.rehostExternal === true,
+      })
       out.push({ ...file, html })
     }
     return out

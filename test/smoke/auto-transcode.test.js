@@ -81,18 +81,30 @@ test('deploy_page auto-transcodes data URIs in HTML and CSS to CDN URLs', { time
     // The whole point: zero data: URIs should remain in the stored variant.
     assert.doesNotMatch(combined, /data:image\//, 'no data: image URIs should remain in stored body+css')
 
-    // Source had 4 data URI occurrences total: 2 <img> (PIXEL + RED) +
-    // 2 CSS url() (both PIXEL). After transcode each occurrence becomes
-    // its corresponding CDN URL — same total count, dedup happens at the
-    // upload layer, not the replacement layer.
-    const cdnUrls = combined.match(/https:\/\/app\.unbounce\.com\/publish\/assets\/[a-f0-9-]+\/inline-[a-f0-9]+\.png/g) ?? []
+    // Source had 4 data URI occurrences: 2 <img> (PIXEL + RED) + 2 CSS url()
+    // (both PIXEL). After rehost, each occurrence becomes its CDN URL —
+    // count preserved. Filenames are now context-derived (alt / css selector)
+    // so the regex tolerates any safe slug, not just "inline-".
+    const cdnUrls = combined.match(/https:\/\/app\.unbounce\.com\/publish\/assets\/[a-f0-9-]+\/[a-z0-9-]+-[a-f0-9]{8}\.png/g) ?? []
     assert.equal(cdnUrls.length, 4, `expected 4 CDN URL occurrences (1 img-PIXEL + 1 img-RED + 2 css-PIXEL), got ${cdnUrls.length}`)
 
     // Two unique CDN URLs: PIXEL collapsed from 3 → 1 upload, RED → 1 upload.
     const uniqueCdnUrls = new Set(cdnUrls)
     assert.equal(uniqueCdnUrls.size, 2, `expected 2 unique CDN URLs (PIXEL deduped, RED separate), got ${uniqueCdnUrls.size}`)
 
-    // Spot-check one CDN URL is actually publicly fetchable.
+    // Filenames are descriptive — RED ref's alt="red" gives a "red-<hash>"
+    // filename; PIXEL group's longest hint wins ("accent-bg" beats "hero-bg"
+    // and "pixel"), so its filename starts with "accent-bg-".
+    assert.ok(
+      [...uniqueCdnUrls].some(u => /\/red-[a-f0-9]{8}\.png$/.test(u)),
+      `expected one CDN URL with red-<hash>.png; got ${[...uniqueCdnUrls]}`
+    )
+    assert.ok(
+      [...uniqueCdnUrls].some(u => /\/(accent-bg|hero-bg|pixel)-[a-f0-9]{8}\.png$/.test(u)),
+      `expected one PIXEL CDN URL with a context-derived slug; got ${[...uniqueCdnUrls]}`
+    )
+
+    // Spot-check the URL actually resolves.
     const sample = [...uniqueCdnUrls][0]
     const head = await fetch(sample, { method: 'HEAD' })
     assert.ok(head.ok, `transcoded CDN URL must be reachable, got HTTP ${head.status}: ${sample}`)
