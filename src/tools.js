@@ -21,6 +21,7 @@ import {
   renameVariant, duplicateVariant, getPageVariants, getVariantPreviewUrl, screenshotVariant,
   activateVariant, deactivateVariant, promoteVariant, deleteVariant,
   getJavascripts, setJavascripts,
+  uploadImage, deleteImage,
   reauthenticate,
 } from './browser.js'
 import { VALID_PLACEMENTS } from './javascripts.js'
@@ -717,6 +718,34 @@ export const TOOL_DEFINITIONS = [
     },
   },
   {
+    name: 'upload_image',
+    description: 'Upload an image to the sub-account\'s asset library and get back a public CDN URL you can use as <img src> in HTML. Use this BEFORE deploy_page / edit_variant / add_variant when the page needs real images — passing data: URIs in HTML works but bloats the payload (each image is ~33% larger as base64 and counts against the 1 MB tool input cap). Provide ONE of: file_path (image already on disk), image_data_url ("data:image/jpeg;base64,..."), or image_url (http/https — MCP fetches and re-uploads it). Returns { uuid, name, cdn_url, file_size, mime_type }; the cdn_url is the only thing you need in your HTML. Once uploaded, the same image can be referenced from any variant of any page in this sub-account — uploading once and reusing is preferred over uploading per page.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string', description: 'Sub-account that will own the asset.' },
+        file_path: { type: 'string', description: 'Absolute path to an image file on disk.' },
+        image_data_url: { type: 'string', description: 'Base64 data URL: "data:image/<type>;base64,<payload>".' },
+        image_url: { type: 'string', description: 'http(s) URL the MCP fetches and re-uploads. Useful for migrating an external CDN image into Unbounce.' },
+        filename: { type: 'string', description: 'Optional override for the filename stored in Unbounce. Defaults to the source basename or a synthesized "image-<ts>.<ext>".' },
+      },
+      required: ['sub_account_id'],
+    },
+  },
+  {
+    name: 'delete_image',
+    description: 'Permanently trash an image from the sub-account\'s asset library. Takes the NUMERIC asset id (the "id" field returned by upload_image — NOT the uuid; the uuid is the public-URL identifier and is not accepted by this endpoint). This cannot be undone — always ask the user for explicit confirmation before calling. After trashing, any <img src> in published HTML pointing at the asset will start 404\'ing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sub_account_id: { type: 'string' },
+        asset_id: { type: 'string', description: 'Numeric asset id from upload_image\'s response.id field.' },
+        confirm: { type: 'boolean', description: 'Must be true to proceed. Ask the user to confirm before setting this.' },
+      },
+      required: ['sub_account_id', 'asset_id', 'confirm'],
+    },
+  },
+  {
     name: 'get_javascripts',
     description: 'Read all custom JavaScripts on a variant — the entries managed via Unbounce\'s "JavaScripts" panel (slots: Head, After Body Tag, Before Body End Tag). Returns each script\'s name, placement, and HTML content. Use this BEFORE set_javascripts to know what\'s currently there, and when modernizing a Classic Builder variant to extract custom JS verbatim. Does NOT return the variant\'s main lp-stylesheet-1 CSS (use get_variant for that).',
     inputSchema: {
@@ -1088,6 +1117,20 @@ export async function handleTool(name, args) {
         method: method || 'none',
         preview_tip: `Test by appending ?${parameter}=YourValue to the page URL.`,
       }
+    }
+
+    case 'upload_image': {
+      return uploadImage(args.sub_account_id, {
+        filePath: args.file_path,
+        imageDataUrl: args.image_data_url,
+        imageUrl: args.image_url,
+        filename: args.filename,
+      })
+    }
+
+    case 'delete_image': {
+      if (!args.confirm) throw new Error('You must set confirm: true to delete an image.')
+      return deleteImage(args.sub_account_id, args.asset_id)
     }
 
     case 'get_javascripts': {

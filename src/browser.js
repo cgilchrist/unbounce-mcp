@@ -27,6 +27,7 @@ import {
   directGetVariant, directEditVariant, directGetVariantNumericIds,
   directRenameVariant, directCreateVariantFromScratch,
   directGetJavascripts, directSetJavascripts,
+  directUploadImage, directDeleteImage,
   directFetchDuplicationOptions, directDuplicatePage,
   directSearchPages, directGetPageInsights, directGetPageStats,
   directGetBulkPageStats, directGetPageVariants, directGetVariantPreviewUrl,
@@ -794,6 +795,64 @@ export async function renameVariant(subAccountId, pageId, variantLetter, name) {
   return withPage(async (page) => {
     const newName = await directRenameVariant(page, pageId, variantLetter, name)
     return { variant: variantLetter, name: newName }
+  })
+}
+
+// ── Asset (image) upload ──────────────────────────────────────────────────────
+
+import { parseDataUrl, resolveUploadFilename } from './asset-upload.js'
+
+/**
+ * Upload an image to the sub-account's asset library. Accepts ONE of:
+ *   - filePath:       absolute path to an image file on disk
+ *   - imageDataUrl:   "data:<mime>;base64,<payload>" (e.g. from prior get_variant)
+ *   - imageUrl:       http(s) URL the MCP fetches and re-uploads
+ * Optional `filename` overrides the name stored in Unbounce's library.
+ */
+export async function uploadImage(subAccountId, { filePath, imageDataUrl, imageUrl, filename } = {}) {
+  const inputs = [filePath, imageDataUrl, imageUrl].filter(Boolean)
+  if (inputs.length === 0) {
+    throw new Error('upload_image requires one of: file_path, image_data_url, image_url')
+  }
+  if (inputs.length > 1) {
+    throw new Error('upload_image accepts only one of: file_path, image_data_url, image_url')
+  }
+
+  let buffer, mimeType, resolvedFilename
+  if (filePath) {
+    buffer = await fs.promises.readFile(filePath)
+    const r = resolveUploadFilename({ filename, filePath })
+    resolvedFilename = r.filename
+    mimeType = r.mimeType
+  } else if (imageDataUrl) {
+    const decoded = parseDataUrl(imageDataUrl)
+    buffer = decoded.buffer
+    const r = resolveUploadFilename({ filename, mimeType: decoded.mimeType })
+    resolvedFilename = r.filename
+    mimeType = r.mimeType
+  } else {
+    const fetched = await fetch(imageUrl)
+    if (!fetched.ok) throw new Error(`Failed to fetch image_url: HTTP ${fetched.status}`)
+    buffer = Buffer.from(await fetched.arrayBuffer())
+    const headerMime = fetched.headers.get('content-type')?.split(';')[0]?.trim()
+    const urlPath = (() => { try { return new URL(imageUrl).pathname } catch { return imageUrl } })()
+    const r = resolveUploadFilename({ filename, filePath: urlPath, mimeType: headerMime })
+    resolvedFilename = r.filename
+    mimeType = r.mimeType
+  }
+
+  if (!mimeType.startsWith('image/')) {
+    throw new Error(`Refusing to upload non-image content (mime: ${mimeType}). only_images=true is enforced server-side anyway.`)
+  }
+
+  return withPage(async (page) => {
+    return directUploadImage(page, subAccountId, { buffer, filename: resolvedFilename, mimeType })
+  })
+}
+
+export async function deleteImage(subAccountId, assetId) {
+  return withPage(async (page) => {
+    return directDeleteImage(page, subAccountId, assetId)
   })
 }
 

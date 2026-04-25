@@ -10,6 +10,7 @@
 import { prepareVariantContent, scopeRawCss } from './transform.js'
 import { stampBodyHtml } from './signature.js'
 import { scriptElementToApi, buildScriptElement } from './javascripts.js'
+import { parseAssetUploadResponse, buildCdnUrl } from './asset-upload.js'
 
 const GATEWAY = 'https://gateway.unbounce.com/graphql'
 const APP_BASE = 'https://app.unbounce.com'
@@ -542,6 +543,77 @@ export async function directEditVariant(page, numericId, newHtml, newCss, varian
     const body = await saveRes.text()
     throw new Error(`save.xml HTTP ${saveRes.status()}: ${body.slice(0, 200)}`)
   }
+}
+
+// ── Asset (image) upload ──────────────────────────────────────────────────────
+
+/**
+ * Upload an image to the sub-account's asset library and return the public
+ * CDN URL plus the raw asset metadata.
+ *
+ * Hits the same endpoint Unbounce's editor uses for drag-and-drop uploads:
+ *   POST /{sub_account_id}/assets
+ *   multipart/form-data with only_images=true, update_cache=true, asset[content]=<file>
+ *   X-CSRF-Token header required
+ *
+ * The response is HTML containing a window.parent.editor.activeAssetUploader
+ * .assetUploaded({...}) call — we parse the metadata out of that.
+ */
+export async function directUploadImage(page, subAccountId, { buffer, filename, mimeType }) {
+  if (!Buffer.isBuffer(buffer)) throw new Error('directUploadImage: buffer must be a Buffer')
+  if (!filename) throw new Error('directUploadImage: filename is required')
+  if (!mimeType) throw new Error('directUploadImage: mimeType is required')
+
+  const csrf = await ensureCsrf(page)
+  const req = page.context().request
+  const res = await req.post(`${APP_BASE}/${subAccountId}/assets`, {
+    headers: {
+      'X-CSRF-Token': csrf,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'text/html',
+    },
+    multipart: {
+      only_images: 'true',
+      update_cache: 'true',
+      'asset[content]': { name: filename, mimeType, buffer },
+    },
+  })
+
+  if (!res.ok()) {
+    const body = await res.text().catch(() => '')
+    throw new Error(`Asset upload HTTP ${res.status()}: ${body.slice(0, 200)}`)
+  }
+
+  const meta = parseAssetUploadResponse(await res.text())
+  return {
+    id: meta.id,
+    uuid: meta.uuid,
+    name: meta.name,
+    file_size: meta.contentFileSize,
+    mime_type: meta.contentContentType,
+    cdn_url: buildCdnUrl(meta.uuid, meta.name),
+  }
+}
+
+/**
+ * Soft-delete (trash) an image asset from the sub-account's library.
+ *
+ * Hits POST /{sub_account_id}/assets/trash with assets[]=<numeric_id>.
+ * The numeric id is the `id` field returned by directUploadImage — the uuid
+ * is the public-URL identifier and is NOT what this endpoint takes.
+ *
+ * Response is a JSON array of trashed ids: ["267686344"].
+ */
+export async function directDeleteImage(page, subAccountId, assetId) {
+  if (!assetId) throw new Error('directDeleteImage: assetId is required')
+  const csrf = await ensureCsrf(page)
+  const url = `${APP_BASE}/${subAccountId}/assets/trash`
+  await railsPost(page, url, `assets[]=${encodeURIComponent(String(assetId))}`, {
+    'X-CSRF-Token': csrf,
+    'X-Requested-With': 'XMLHttpRequest',
+    'Accept': 'application/json',
+  })
+  return { trashed: String(assetId) }
 }
 
 // ── Custom JavaScripts (lp-script elements) ───────────────────────────────────
