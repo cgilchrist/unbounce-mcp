@@ -623,7 +623,7 @@ export async function duplicatePage(subAccountId, pageId, { includeInactiveVaria
 /**
  * Read the current HTML and CSS of a specific variant.
  * Direct path: reads edit.json via API (lp-code-1 + lp-stylesheet-1 elements).
- * Fallback: navigates to the preview iframe for legacy builder pages.
+ * Fallback: navigates to the preview iframe for Classic Builder pages.
  * @returns {{ html: string, css: string, variant: string, numericId: string }}
  */
 export async function getVariantContent(subAccountId, pageId, variantLetter) {
@@ -637,7 +637,7 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
     // that's the authoritative source for MCP-created variants, which store
     // body content WITHOUT a <!DOCTYPE> wrapper (prepareVariantContent
     // extracts the body innerHTML). The preview fallback below is only for
-    // true legacy builder pages whose lp-code-1 element is empty.
+    // true Classic Builder pages whose lp-code-1 element is empty.
     try {
       const variantIds = await directGetVariantNumericIds(page, pageId)
       directNumericId = variantIds[variantLetter.toLowerCase()]
@@ -651,7 +651,7 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
       console.error('[getVariantContent] Direct path failed:', err.message)
     }
 
-    // Legacy builder page — content in edit.json is empty; fall back to rendered preview.
+    // Classic Builder page — content in edit.json is empty; fall back to rendered preview.
     // Partial custom code (tracking snippets etc.) is preserved alongside the preview HTML.
     try {
       const { variants } = await directGetPageVariants(page, pageId)
@@ -682,9 +682,9 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
             custom_css: css || null,
             source: 'rendered_preview',
             note: [
-              'LEGACY BUILDER PAGE — READ-ONLY REFERENCE.',
+              'CLASSIC BUILDER PAGE — READ-ONLY REFERENCE.',
               '',
-              'This HTML is the fully rendered output of an Unbounce visual builder page. It is',
+              'This HTML is the fully rendered output of an Unbounce Classic Builder page. It is',
               'extremely large and contains internal builder JSON, iframe srcdoc, lightbox sub-pages,',
               'and other structures that cannot be meaningfully edited via edit_variant.',
               '',
@@ -699,6 +699,11 @@ export async function getVariantContent(subAccountId, pageId, variantLetter) {
               '  Write fresh, clean custom HTML/CSS for the new variant from scratch.',
               '  Extract text content, colors, fonts, and image URLs from this HTML as inputs,',
               '  then compose a new document — do not copy the builder structure.',
+              '',
+              'If the user is asking you to MODERNIZE this Classic Builder page (replicate it as',
+              'clean responsive HTML, get rid of absolute positioning, etc.), call the',
+              'get_classic_builder_modernization_guidelines tool BEFORE writing any HTML —',
+              'it returns the full set of fidelity rules and the workflow to follow.',
               '',
               'custom_code/custom_css: any existing custom code snippets from the original (may be empty).',
               '',

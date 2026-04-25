@@ -719,6 +719,11 @@ export const TOOL_DEFINITIONS = [
     description: 'Returns landing page best practices and conversion rules. MUST be called before generating any landing page HTML.',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'get_classic_builder_modernization_guidelines',
+    description: 'Returns the rules for converting an Unbounce Classic Builder variant (drag-and-drop, absolute-positioned) into a clean responsive HTML/CSS replica. MUST be called BEFORE writing any HTML when the user asks to: "modernize" or "modernise" a page, "recreate as clean HTML", "make a replica of variant X", "get rid of absolute positioning", "make this responsive", "convert from Classic Builder", or any equivalent phrasing. Pixel-faithful replica only — no creative, copy, or CRO changes; mobile-responsive layout required.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ]
 
 export async function handleTool(name, args) {
@@ -1054,6 +1059,104 @@ export async function handleTool(name, args) {
           {
             rule: 'Variant preview URLs and visual inspection',
             detail: 'To visually inspect a variant (published or unpublished), use screenshot_variant — it returns a full-page rendered image you can see directly. This is the preferred method for understanding a page\'s design before creating a new variant. For a PUBLISHED page, you can also link directly to a variant without triggering stats by appending the variant letter and ".html" to the page URL (e.g. https://unbouncepages.com/my-page/a.html) — construct this from page.url returned by get_page, never ask the user. If a user asks for a shareable preview link, use get_variant_preview_url and give them the share_url.',
+          },
+        ],
+      }
+    }
+
+    case 'get_classic_builder_modernization_guidelines': {
+      return {
+        purpose: 'Convert an Unbounce Classic Builder variant (drag-and-drop, absolute-positioned) into a clean, responsive HTML/CSS replica. PIXEL-FAITHFUL REPLICATION ONLY — no creative changes, no copy edits, no CRO changes, no layout reinterpretation. The output must look identical to the source on desktop and reflow sensibly on mobile.',
+        workflow: [
+          'Step 1 — Visual reference: call screenshot_variant on the source variant. Save the image; you will use it as the truth source for the side-by-side comparison at the end.',
+          'Step 2 — Source extraction: call get_variant on the source variant. Classic Builder pages return rendered_preview HTML (note.source === "rendered_preview"). Use that HTML and the embedded srcdoc (if any) as your read-only source CSS and content reference. NEVER pass this HTML back through edit_variant or add_variant.',
+          'Step 3 — Audit (BEFORE writing any HTML): record exact values, listed in the AUDIT rule below. If you cannot find an exact value, say so before proceeding rather than guessing.',
+          'Step 4 — Write clean HTML: produce a single self-contained HTML document using flexbox/grid (NOT absolute positioning). Every numeric value must come from the audit, with the one exception described in DRIFT CORRECTION below.',
+          'Step 5 — Verify: take a screenshot of your replica (deploy_page with publish:false → screenshot_variant on the new page) and do a side-by-side comparison against the source screenshot. Apply the PASS CRITERIA below.',
+          'Step 6 — Deliver: once the replica passes, add it as a new INACTIVE variant on the same page (add_variant). Name it "Control Replica — Clean HTML". Do not set traffic weights, do not activate, do not promote. Leave it for the user to review.',
+        ],
+        rules: [
+          {
+            rule: 'AUDIT — extract exact values before writing any HTML',
+            detail: [
+              'Before a single line of HTML is written, record from the source:',
+              '• Every distinct text element\'s font-family, font-size, font-weight, line-height, letter-spacing, color, text-transform (headline, subhead, body, list items, form labels, placeholders, buttons, footer copy, etc.)',
+              '• Every background — solid colors and gradients in their exact format (rgba/hex/gradient stops with stop positions). Distinguish section backgrounds from block backgrounds.',
+              '• Every image\'s rendered width × height (computed, not the natural dimensions of the underlying file). Watch for images styled with object-fit: cover.',
+              '• All padding and margin values for major sections, blocks, and the form container.',
+              '• Button text, font-size, font-family, background-color, hover state, border-radius, padding.',
+              '• Form field labels (verbatim), placeholder text (verbatim), field order, field types, required-state indicators.',
+              '• Spacing between sections (the gap, not just per-section padding).',
+              'Recording in a structured table is fine; the goal is that every numeric value in your output HTML can be traced back to a row in this audit.',
+            ].join('\n'),
+          },
+          {
+            rule: 'IMAGE ASSETS — always reuse, never substitute',
+            detail: [
+              'For every <img> tag in the rendered_preview HTML the real CDN URL is in the data-src-desktop-1x attribute (and data-src-mobile-1x if separately specified). The img\'s src= will be a data: URI placeholder — that is NOT the real image; do not use it.',
+              'Use the data-src-desktop-1x value verbatim as the src of your replica\'s <img>. These follow the pattern //image-service.unbounce.com/https%3A%2F%2Fapp.unbounce.com%2Fpublish%2Fassets%2F{uuid}%2F{filename}?{params}.',
+              'NEVER use URLs in the format app.unbounce.com/assets/{uuid}/{filename} (without /publish/) — those are private builder paths that fail on the public domain.',
+              'Logos, photographs, headshots, product shots, hero imagery: all reuse, never substitute. The variant rules under VIDEO BACKGROUNDS / IMAGERY apply equally here.',
+            ].join('\n'),
+          },
+          {
+            rule: 'WEB FONTS — load them or they will silently fall back',
+            detail: 'The source page\'s fonts are declared via window.ub.page.webFonts = ["Jost:700,regular,600,300italic"] (or similar). The replica must include a <link rel="stylesheet" href="https://fonts.googleapis.com/css2?..."> tag for the same family and weight set, OR an @import in the CSS. Without it the replica falls back to system fonts and the audit values become meaningless. If the source has visible Google Fonts <link> tags already, copy them verbatim.',
+          },
+          {
+            rule: 'VIDEO BACKGROUNDS — preserve provider, ID, embed params, and color overlay',
+            detail: [
+              'If the source has a section with a video background:',
+              '• Reuse the EXACT same video provider (YouTube/Vimeo) and video ID. Look for <iframe id="lp-pom-block-{N}-video-background-iframe" src="//www.youtube.com/embed/{videoId}?...">.',
+              '• Preserve the embed query parameters from the source iframe: mute, autoplay, loop, controls, modestbranding, rel, iv_load_policy, disablekb, fs, playsinline. Each is a design decision.',
+              '• Color overlay: look for <div id="lp-pom-block-{N}-color-overlay"> in the HTML and the matching CSS rule for its background-color and opacity. Replicate verbatim. If no overlay exists, do not add one.',
+              '• Layout the video as a positioned background within its section using a wrapping div with overflow:hidden and the iframe set to cover the section (similar to lp-pom-video-background\'s structure but with modern CSS — width:100%, height:100%, object-fit equivalent via aspect-ratio + padding-bottom hack or width:177.78% on a 16:9 video to preserve the original "stretch background to page edges" feel).',
+            ].join('\n'),
+          },
+          {
+            rule: 'DRIFT CORRECTION — normalize manual-placement noise, preserve intentional design',
+            detail: [
+              'Classic Builder requires users to drag every element into place, so visually-identical sibling elements (feature cards in a row, stat tiles, button groups, form rows, testimonials) often differ by a few pixels due to imprecise dragging. NORMALIZE these — but only when ALL of the following hold:',
+              '• The elements share the same parent and clearly play the same role,',
+              '• Their differences are small (typically <2% of the larger dimension AND ≤8px in absolute terms),',
+              '• The values are jittery / random (e.g. 198, 201, 199, 202) rather than forming a meaningful pattern (e.g. 200, 220, 240 ascending = intentional).',
+              'When you normalize a group, take the median value and LIST what you changed in your audit notes: e.g. "Normalized feature card widths from [298, 301, 300, 299] → 300px (drift correction)".',
+              'If the values already sit on a design-system spacing scale (4/8/12/16/24/32/48/64/96), they were intentional — leave them alone.',
+              'When in doubt, lean toward NOT normalizing: better to be true to the original than to "improve" something that was intentional.',
+            ].join('\n'),
+          },
+          {
+            rule: 'NO CREATIVE CHANGES — replication only',
+            detail: 'This is a replication task, not a redesign. You have ZERO creative latitude. Do not change copy, do not "tighten" wording, do not add or remove sections, do not swap CTA verbs ("Get Started" → "Start Now" is forbidden), do not adjust color contrast for accessibility, do not change image crops, do not reorder fields. If the source has a typo, the replica has the same typo. If the user wants creative changes, that is a different task done in a separate variant after the replica is approved.',
+          },
+          {
+            rule: 'RESPONSIVE LAYOUT — replace absolute positioning with flexbox/grid',
+            detail: [
+              'The source uses position:absolute everywhere — that is the entire point we are migrating away from. The replica MUST be implemented with modern flexbox and grid such that:',
+              '• Desktop renders pixel-faithfully to the source (the audit values determine widths, heights, gaps, padding).',
+              '• At narrower viewports, multi-column rows collapse to single columns; gaps reduce proportionally; text remains legible.',
+              '• Use clamp() or media queries for font sizes that would otherwise be too large on mobile.',
+              '• No element uses position:absolute except for genuinely-overlapping elements like a logo over a hero image or a video color overlay.',
+              '• Do NOT use min-height tricks, magic-number margins, or absolute hacks to "fake" the layout. If you find yourself fighting the layout, the parent container\'s flex/grid setup is wrong; fix it there.',
+            ].join('\n'),
+          },
+          {
+            rule: 'PASS CRITERIA — concrete checks for the side-by-side comparison',
+            detail: [
+              'After deploying the replica and screenshotting it, place the source and replica side by side. The replica passes when ALL of these hold:',
+              '• Every text string is byte-identical to the source (case, punctuation, whitespace).',
+              '• Every font-family / font-weight matches.',
+              '• Every color is within RGB delta ≤ 8 of the source.',
+              '• No visible element has a position offset > 16px from where it sits in the source (at desktop width).',
+              '• Every image is present and at the same approximate size (within 5%).',
+              '• Every form field is present, in the same order, with the same labels and placeholders.',
+              '• Every button label and CTA matches verbatim.',
+              'List ANY remaining difference you can see, even small ones, before declaring done. If you find yourself writing "minor visual difference" — describe it concretely.',
+            ].join('\n'),
+          },
+          {
+            rule: 'DELIVERY — inactive variant on the same page',
+            detail: 'When the replica passes, call add_variant on the SAME page (sub_account_id and page_id from get_variant), then rename_variant to "Control Replica — Clean HTML". DO NOT activate the variant, DO NOT set traffic weights, DO NOT promote it. The user reviews and decides what to do next. If the page is in standard mode, leave it that way; do not switch to A/B test mode.',
           },
         ],
       }
