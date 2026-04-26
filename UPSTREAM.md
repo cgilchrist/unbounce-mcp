@@ -105,3 +105,34 @@ around it but it cost us complexity" signal.
 - **A direct REST/GraphQL way to read full page HTML+CSS** (analogous to
   what we get back via `get_variant`) without going through the editor's
   variant-state endpoints.
+- **Routing strategy readable and filterable.** `GET /pages/{uuid}`'s
+  `tests` object reports `ab_test` regardless of the actual mode — no
+  signal that distinguishes Smart Traffic / Standard / A/B. And
+  `list_pages` has no filter for routing strategy, so finding "all
+  Smart Traffic pages" requires a follow-up get-call per page.
+- **Publisher should only inject into the first DOM `<head>` element.**
+  Today it does a literal string-replace for `<head>` and injects after
+  every match — including inside `<script>` bodies, comments, and
+  JSON-encoded content. Full repro + workaround at
+  [`src/packager.js:28-63`](src/packager.js); the `hasJsonEncodedTemplate`
+  / `unwrapJsonEncodedTemplate` path exists entirely because of this.
+- **Publisher injects default `main.css` we have to reset.** The
+  published page gets a stylesheet of Unbounce-default rules we don't
+  want. [`src/transform.js`](src/transform.js) `extractCss` rewrites
+  `body` selectors to `body.lp-pom-body:not(.lp-convertable-page)` and
+  appends `LAYOUT_OVERRIDES` to neutralize them. If `main.css` weren't
+  injected (or were opt-out), both pieces of code would go away.
+- **Filter `list_pages` by performance / insight criteria.** Today an
+  agent that wants "pages with a winning variant at >95% confidence"
+  or "pages with IBR insights" has to fetch every page and filter
+  client-side. A query-side filter (or a dedicated `find_pages_by_*`
+  endpoint set) would let agents act directly on those segments.
+- **Traffic-source breakdown per page in the stats API.** Currently
+  `GET /pages/{uuid}/stats` (and friends) return aggregate visitor /
+  conversion numbers but no channel breakdown. Returning paid /
+  organic / email / social / direct splits would let agents create
+  channel-specific variants without a separate analytics integration.
+- **Behaviour sets exposed in the API.** No way to read or write a
+  page's behaviour sets today, and no `pages_with_behaviour_sets`
+  filter for `list_pages`. Both would let the MCP reason about the
+  audience-targeting layer that lives entirely in the UI right now.
