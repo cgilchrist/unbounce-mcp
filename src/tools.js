@@ -1287,6 +1287,8 @@ export async function handleTool(name, args) {
               'Use the data-src-desktop-1x value verbatim as the src of your replica\'s <img>. These follow the pattern //image-service.unbounce.com/https%3A%2F%2Fapp.unbounce.com%2Fpublish%2Fassets%2F{uuid}%2F{filename}?{params}.',
               'NEVER use URLs in the format app.unbounce.com/assets/{uuid}/{filename} (without /publish/) — those are private builder paths that fail on the public domain.',
               'Logos, photographs, headshots, product shots, hero imagery: all reuse, never substitute. The variant rules under VIDEO BACKGROUNDS / IMAGERY apply equally here.',
+              '',
+              'IMAGE DIMENSIONS — do not substitute aspect-ratio defaults for explicit pixel dimensions. The source CSS specifies explicit `width:` and `height:` on `.lp-pom-image-container` and the `<img>` inside it (e.g. `width: calc(455px * var(--scale, 1)); height: calc(458px * var(--scale, 1))`). Those dimensions are the truth. Do not replace them with `aspect-ratio: 4/5`, `aspect-ratio: 1/1`, or `aspect-ratio: 16/9` — even if the result looks approximately equivalent, a 455×458 container is not `aspect-ratio: 4/5` (that would be 455×569). This is a category error, not a precision concern. (DRIFT CORRECTION still permits pixel-level deviation within jittery sibling groups; this rule is about replacing explicit dimensions with templated ratios on a single image.)',
             ].join('\n'),
           },
           {
@@ -1338,6 +1340,44 @@ export async function handleTool(name, args) {
             detail: 'This is a replication task, not a redesign. You have ZERO creative latitude. Do not change copy, do not "tighten" wording, do not add or remove sections, do not swap CTA verbs ("Get Started" → "Start Now" is forbidden), do not adjust color contrast for accessibility, do not change image crops, do not reorder fields. If the source has a typo, the replica has the same typo. If the user wants creative changes, that is a different task done in a separate variant after the replica is approved.',
           },
           {
+            rule: 'NO ADDITIONS — replicate only what is in the source',
+            detail: [
+              'NO CREATIVE CHANGES forbids changing what is there. NO ADDITIONS forbids adding what is not. The two rules cover different failure modes — partial application of the modernization brief has historically produced replicas that "feel modern" via additions the source never had.',
+              '',
+              'Before adding any element, container, or behavior to the replica, locate the specific source CSS rule that creates it. If you cannot, do not add it. Specifically forbidden additions:',
+              '• Sticky / fixed / scroll-locked navigation bars when the source has none. A rounded-rectangle box at top-left of the hero containing a logo image is NOT a header — it is an in-row sibling of the other hero elements (see PRESERVE SIBLING ORDER under RESPONSIVE LAYOUT). Do not promote it to a sticky page header.',
+              '• Header wrappers (`<header class="site-header">`), nav links ("Home", "About", "Contact"), breadcrumbs, "back to top" buttons, scroll-progress indicators, skip-to-content links.',
+              '• Footer elements not present in the source.',
+              '• Hover effects, transitions, transforms (`translateY(-1px)`, scale changes), arrow icons appearing on hover, or any animation the source CSS does not explicitly define. If the source button has no transition rule, your replica button has no transition rule.',
+              '• "Modern app shell" wrappers (`<header><main><footer>`) imposed on a page whose source structure is a flat sequence of positioned blocks.',
+              '• Accessibility additions the source does not have (visible focus rings beyond browser default, ARIA landmarks that change layout, etc.). Reasonable `alt` text on images is the one allowed exception.',
+              '',
+              'Test for any element you are about to add: "Which source CSS rule, by selector, defines this element\'s presence and styling?" If you cannot name the selector, the element does not belong in the replica.',
+            ].join('\n'),
+          },
+          {
+            rule: 'INTERACTION STATES — replicate :hover, :focus, :active exactly',
+            detail: [
+              'Buttons, links, and form fields often define their visual identity in interaction states, not the resting state. Two buttons with identical resting fills can be entirely different controls if one inverts on hover and the other slides up.',
+              '',
+              'For every `<a>`, `<button>`, `<input>`, `<textarea>`, and `<select>` in the source, find the corresponding `:hover`, `:focus`, `:active`, `:focus-visible`, and `::placeholder` rules in the source CSS and replicate them verbatim — same colors, same border changes, same background swaps. Do NOT invent new interaction behavior.',
+              '',
+              'Concrete example of the failure this rule prevents: source defines `#lp-pom-button-87 { background: rgba(27,45,6,1); color: #fff; border: 1px solid #fff }` with `:hover { background: #fff; color: #172b05 }` — a dark-green button with a white border that inverts to white-on-green on hover. Replacing it with a solid light-green pill that slightly darkens on hover is NOT a replication, even if the new design "feels equivalent" — it is a different button.',
+              '',
+              'If the source has no `:hover` rule for an element, your replica has no `:hover` rule. Do not add a default "lift on hover" or "fade on hover" because it feels modern.',
+            ].join('\n'),
+          },
+          {
+            rule: 'ELEMENT NAMES ARE NOT CONTENT',
+            detail: [
+              'Variant-JSON `name` fields ("Home", "Bio", "Header", "Hero", "CTA"), image filenames (`landing-pages-image.png`, `happy-businesswoman-commuting.png`), asset slug paths, and CSS class names are author-side metadata. They are NOT user-facing text and must never appear as nav links, headings, button labels, alt text, or any other visible string in the replica.',
+              '',
+              'Visible content lives only in: rendered HTML text nodes (`<p>`, `<span>`, `<a>` inner text), `content.text` / `content.label` fields on form and button elements, the image asset itself (the rendered pixels), and explicit `alt=` attributes set by the user.',
+              '',
+              'Specific failure this prevents: an element with `name: "Home"` in the variant JSON corresponds to the house photograph in the hero — the word "Home" is a builder-side label for the asset, not a user-facing string. Surfacing "Home" as a navigation link doubles up the semantic (the photograph already conveys "home") and inserts content the user never authored.',
+            ].join('\n'),
+          },
+          {
             rule: 'RESPONSIVE LAYOUT — replace absolute positioning with flexbox/grid',
             detail: [
               'The source uses position:absolute everywhere — that is the entire point we are migrating away from. The replica MUST be implemented with modern flexbox and grid such that:',
@@ -1346,6 +1386,13 @@ export async function handleTool(name, args) {
               '• Use clamp() or media queries for font sizes that would otherwise be too large on mobile.',
               '• No element uses position:absolute except for genuinely-overlapping elements like a logo over a hero image or a video color overlay.',
               '• Do NOT use min-height tricks, magic-number margins, or absolute hacks to "fake" the layout. If you find yourself fighting the layout, the parent container\'s flex/grid setup is wrong; fix it there.',
+              '',
+              'PRESERVE SIBLING ORDER AND COLUMN ASSIGNMENT. Migrating from absolute to flex/grid does not give you license to reinterpret the layout. To map source positioning to a replica:',
+              '• Group source elements by their `top:` value into rows (elements within ~50–100px of each other vertically share a row).',
+              '• Within each row, sort siblings by their `left:` value to determine left-to-right column order.',
+              '• Your replica\'s flex/grid containers must preserve that order. If the source has a logo box at left:80 and a green hero card at left:595, the replica\'s hero row is `[logo-block | green-card]`, not `[green-card | logo-block]`.',
+              '• Promoting an in-row positioned element to a different structural role is forbidden. A box at left:80;top:56 is a sibling of the other top:56 elements, not a page header. Even if the box contains a logo and "logo at top of page = sticky header" is a familiar pattern, the source CSS is the source of truth — not pattern-matching against typical web shells.',
+              '• Multi-row stacking order (top-to-bottom) must also match. Sort rows by `top:` ascending; do not shuffle them.',
             ].join('\n'),
           },
           {
@@ -1372,7 +1419,14 @@ export async function handleTool(name, args) {
               '• Every image is present and at the same approximate size (within 5%).',
               '• Every form field is present, in the same order, with the same labels and placeholders.',
               '• Every button label and CTA matches verbatim.',
-              'List ANY remaining difference you can see, even small ones, before declaring done. If you find yourself writing "minor visual difference" — describe it concretely.',
+              '',
+              'BEFORE DELIVERY, you MUST produce a structured diff table comparing the source screenshot to the replica screenshot. Output it as a markdown table titled "Source vs Replica diff" with these columns:',
+              '',
+              '  | area | source | replica | reason for difference |',
+              '',
+              'One row per visible difference, however small. "Area" names the region (header, hero, bio, form CTA, footer); "source" describes the source\'s state for that area; "replica" describes what your replica does; "reason" is either a deliberate justified deviation OR "BUG — will fix before delivery". If the table is empty, write the literal line "No visible differences detected." underneath the table header — this is a falsifiable claim the user can challenge.',
+              '',
+              'Do not write "minor visual difference" without describing it concretely. Do not skip the table because the replica "looks right." The act of producing the table is the forcing function — it surfaces drift the agent would otherwise rationalize away.',
             ].join('\n'),
           },
           {
@@ -1380,6 +1434,19 @@ export async function handleTool(name, args) {
             detail: 'When the replica passes, call add_variant on the SAME page (sub_account_id and page_id from get_variant), then rename_variant to "Control Replica — Clean HTML". DO NOT activate the variant, DO NOT set traffic weights, DO NOT promote it. The user reviews and decides what to do next. If the page is in standard mode, leave it that way; do not switch to A/B test mode.',
           },
         ],
+        common_failures: [
+          'These are real failure modes from prior modernization attempts. Each was rejected by the user and required a redo. Read them before writing HTML.',
+          '',
+          '1. INVENTED STICKY HEADER. Source has a dark-green rounded box at left:80;top:56 containing a logo image — a sibling of the other elements in the hero row. Replica wraps the page in `<header class="site-header" style="position:sticky;top:0">` with the logo inside, plus an invented "Home" nav link. The box was never a header in the source; it was a peer of the house photo and the hero card. (Caught by: NO ADDITIONS, PRESERVE SIBLING ORDER.)',
+          '',
+          '2. SWAPPED HERO COLUMNS. Source hero row reads left-to-right: [logo-block + house-photo column | green-card column]. Replica reads: [green-card | house-photo]. The model defaulted to the familiar "headline-left, image-right" hero pattern instead of matching the source\'s left/right assignment. (Caught by: PRESERVE SIBLING ORDER.)',
+          '',
+          '3. ASPECT-RATIO DRIFT ON A NEAR-SQUARE IMAGE. Source bio photo container is 455×458 (essentially square). Replica uses `aspect-ratio: 4/5` because "portrait felt right for a headshot." 4/5 is 455×569, not 455×458 — categorically different. (Caught by: IMAGE ASSETS / IMAGE DIMENSIONS.)',
+          '',
+          '4. BUTTON STYLE FLIPPED FROM OUTLINE TO SOLID. Source form CTA: `background:#1b2d06; color:#fff; border:1px solid #fff` with `:hover { background:#fff; color:#172b05 }` — a dark-green button with white border and white text that inverts to white-with-green-text on hover. Replica: solid light-green pill with dark text, no border, no inversion. The model preferred the new aesthetic and broke the unambiguous "no creative changes" rule. (Caught by: NO CREATIVE CHANGES, INTERACTION STATES.)',
+          '',
+          '5. ELEMENT NAME SURFACED AS NAV CONTENT. Variant JSON has an image element with `name: "Home"` (referring to the house photograph). Replica creates a "Home" nav link in the invented sticky header, treating the builder-side label as user-facing copy. (Caught by: ELEMENT NAMES ARE NOT CONTENT, NO ADDITIONS.)',
+        ].join('\n'),
       }
     }
 
